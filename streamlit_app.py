@@ -741,7 +741,7 @@ def get_instance_recommendations(servers):
     
     return recommendations
 
-def calculate_cost_analysis(servers, params, recommendations):
+def calculate_enhanced_cost_analysis(servers, params, recommendations):
     """Calculate cost analysis"""
     
     # Simplified pricing data
