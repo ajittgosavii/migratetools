@@ -1412,16 +1412,20 @@ def calculate_enhanced_cost_analysis(servers, params, recommendations):
 
     total_migration_cost = migration_team_cost + data_transfer_cost + tools_and_training + aws_services + contingency
 
-    # Calculate ROI
+    # Calculate annual savings
     total_annual_savings = total_current_cost - total_aws_cost
+    
+    # Calculate ROI and payback period
     roi_3_year = ((total_annual_savings * 3 - total_migration_cost) / total_migration_cost * 100) if total_migration_cost > 0 else 0
+    payback_period_months = (total_migration_cost / (total_annual_savings / 12)) if total_annual_savings > 0 else 0
 
     return {
         'cost_breakdown': pd.DataFrame(cost_data),
         'total_current_cost': total_current_cost,
         'total_aws_cost': total_aws_cost,
         'total_annual_savings': total_annual_savings,
-        'roi_3_year': roi_3_year,  # Add ROI to results
+        'roi_3_year': roi_3_year,
+        'payback_period_months': payback_period_months,  # Add this line
         'migration_costs': {
             'migration_team': migration_team_cost,
             'data_transfer': data_transfer_cost,
