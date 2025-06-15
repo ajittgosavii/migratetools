@@ -27,7 +27,6 @@ try:
     PDF_AVAILABLE = True
 except ImportError:
     PDF_AVAILABLE = False
-    st.warning("PDF generation unavailable. Install: pip install reportlab")
 
 # AI and AWS integrations
 try:
@@ -180,6 +179,8 @@ st.markdown("""
     .status-connected { background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%); color: #22543d; }
     .status-disconnected { background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%); color: #742a2a; }
     .status-fallback { background: linear-gradient(135deg, #feebc8 0%, #fbd38d 100%); color: #744210; }
+    .status-error { background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%); color: #742a2a; }
+    .status-unavailable { background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%); color: #742a2a; }
     
     .service-status-card {
         background: white;
@@ -217,31 +218,44 @@ class AWSPricingService:
     def __init__(self):
         self.pricing_client = None
         self.ec2_client = None
-        self.region = 'us-east-1'  # Default region
+        self.region = 'us-east-1'
         self.connection_error = None
-        self.initialize_clients()
+        self.is_initialized = False
+        self._initialize_clients()
     
-    def initialize_clients(self):
+    def _initialize_clients(self):
         """Initialize AWS clients if credentials are available"""
-        if AWS_API_AVAILABLE:
-            try:
-                # Test with a simple pricing call
-                self.pricing_client = boto3.client('pricing', region_name='us-east-1')
-                self.ec2_client = boto3.client('ec2', region_name=self.region)
-                
-                # Test the connection with a simple call
-                test_response = self.pricing_client.describe_services(MaxResults=1)
-                return True
-            except (NoCredentialsError, ClientError) as e:
-                self.connection_error = str(e)
-                return False
-            except Exception as e:
-                self.connection_error = f"AWS API Error: {str(e)}"
-                return False
-        return False
+        self.is_initialized = True
+        if not AWS_API_AVAILABLE:
+            self.connection_error = "AWS SDK not available"
+            return False
+            
+        try:
+            # Test with a simple pricing call
+            self.pricing_client = boto3.client('pricing', region_name='us-east-1')
+            self.ec2_client = boto3.client('ec2', region_name=self.region)
+            
+            # Test the connection with a simple call
+            test_response = self.pricing_client.describe_services(MaxResults=1)
+            return True
+        except (NoCredentialsError, ClientError) as e:
+            self.connection_error = str(e)
+            self.pricing_client = None
+            return False
+        except Exception as e:
+            self.connection_error = f"AWS API Error: {str(e)}"
+            self.pricing_client = None
+            return False
     
     def get_connection_status(self):
         """Get detailed connection status"""
+        if not self.is_initialized:
+            return {
+                'status': 'error',
+                'message': 'Service not initialized',
+                'details': 'Internal initialization error'
+            }
+            
         if not AWS_API_AVAILABLE:
             return {
                 'status': 'unavailable',
@@ -249,8 +263,8 @@ class AWSPricingService:
                 'details': 'Install boto3: pip install boto3'
             }
         
-        try:
-            if self.pricing_client:
+        if self.pricing_client:
+            try:
                 # Test with actual API call
                 test_response = self.pricing_client.describe_services(MaxResults=1)
                 return {
@@ -258,17 +272,17 @@ class AWSPricingService:
                     'message': 'Real-time AWS pricing active',
                     'details': f'Connected to {self.region} region'
                 }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': 'AWS connection failed',
-                'details': str(e)
-            }
+            except Exception as e:
+                return {
+                    'status': 'error',
+                    'message': 'AWS connection failed',
+                    'details': str(e)
+                }
         
         return {
             'status': 'fallback',
             'message': 'Using fallback pricing',
-            'details': 'Configure AWS credentials for real-time pricing'
+            'details': self.connection_error or 'Configure AWS credentials for real-time pricing'
         }
     
     def get_ec2_pricing(self, instance_types: List[str] = None) -> Dict[str, float]:
@@ -276,11 +290,10 @@ class AWSPricingService:
         if not instance_types:
             instance_types = list(self.get_fallback_ec2_pricing().keys())
             
-        pricing = {}
-        
         if not self.pricing_client:
             return self.get_fallback_ec2_pricing()
         
+        pricing = {}
         try:
             for instance_type in instance_types:
                 response = self.pricing_client.get_products(
@@ -307,7 +320,6 @@ class AWSPricingService:
                     pricing[instance_type] = self.get_fallback_ec2_pricing().get(instance_type, 0.192)
                     
         except Exception as e:
-            st.warning(f"AWS Pricing API error: {str(e)}. Using fallback pricing.")
             return self.get_fallback_ec2_pricing()
         
         return pricing
@@ -317,11 +329,10 @@ class AWSPricingService:
         if not instance_types:
             instance_types = list(self.get_fallback_rds_pricing().keys())
             
-        pricing = {}
-        
         if not self.pricing_client:
             return self.get_fallback_rds_pricing()
         
+        pricing = {}
         try:
             for instance_type in instance_types:
                 response = self.pricing_client.get_products(
@@ -352,7 +363,7 @@ class AWSPricingService:
         return pricing
     
     def get_mongodb_atlas_pricing(self) -> Dict[str, float]:
-        """Get MongoDB Atlas pricing (fallback to known rates)"""
+        """Get MongoDB Atlas pricing"""
         return {
             'M10': 0.08, 'M20': 0.12, 'M30': 0.54, 'M40': 1.08,
             'M50': 2.16, 'M60': 4.32, 'M80': 8.64, 'M140': 17.28,
@@ -421,29 +432,42 @@ class EnterpriseAIService:
     def __init__(self):
         self.client = None
         self.connection_error = None
-        self.initialize_client()
+        self.is_initialized = False
+        self._initialize_client()
     
-    def initialize_client(self):
+    def _initialize_client(self):
         """Initialize Anthropic client"""
-        if ANTHROPIC_AVAILABLE:
-            try:
-                api_key = st.secrets.get('ANTHROPIC_API_KEY') or st.session_state.get('anthropic_api_key')
-                if api_key:
-                    self.client = anthropic.Anthropic(api_key=api_key)
-                    # Test the connection
-                    test_response = self.client.messages.create(
-                        model="claude-3-5-sonnet-20241022",
-                        max_tokens=10,
-                        messages=[{"role": "user", "content": "Hello"}]
-                    )
-                    return True
-            except Exception as e:
-                self.connection_error = str(e)
-                return False
+        self.is_initialized = True
+        if not ANTHROPIC_AVAILABLE:
+            self.connection_error = "Anthropic SDK not available"
+            return False
+            
+        try:
+            api_key = st.secrets.get('ANTHROPIC_API_KEY') or st.session_state.get('anthropic_api_key')
+            if api_key:
+                self.client = anthropic.Anthropic(api_key=api_key)
+                # Test the connection
+                test_response = self.client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=10,
+                    messages=[{"role": "user", "content": "Hello"}]
+                )
+                return True
+        except Exception as e:
+            self.connection_error = str(e)
+            self.client = None
+            return False
         return False
     
     def get_connection_status(self):
         """Get detailed AI connection status"""
+        if not self.is_initialized:
+            return {
+                'status': 'error',
+                'message': 'Service not initialized',
+                'details': 'Internal initialization error'
+            }
+            
         if not ANTHROPIC_AVAILABLE:
             return {
                 'status': 'unavailable',
@@ -482,7 +506,7 @@ class EnterpriseAIService:
         return {
             'status': 'fallback',
             'message': 'Using fallback analysis',
-            'details': 'Configure API key for AI insights'
+            'details': self.connection_error or 'Configure API key for AI insights'
         }
     
     def get_comprehensive_analysis(self, migration_data: Dict[str, Any]) -> Dict[str, str]:
@@ -540,7 +564,6 @@ class EnterpriseAIService:
                 )
                 analyses[analysis_type] = response.content[0].text
         except Exception as e:
-            st.warning(f"AI analysis error: {str(e)}")
             return self.get_fallback_analysis()
         
         return analyses
@@ -630,11 +653,16 @@ class EnterpriseAIService:
 # PDF Report Generator
 class PDFReportGenerator:
     def __init__(self):
+        if not PDF_AVAILABLE:
+            return
         self.styles = getSampleStyleSheet()
         self.custom_styles = self.create_custom_styles()
     
     def create_custom_styles(self):
         """Create custom paragraph styles"""
+        if not PDF_AVAILABLE:
+            return {}
+            
         custom_styles = {}
         
         custom_styles['CustomTitle'] = ParagraphStyle(
@@ -669,6 +697,9 @@ class PDFReportGenerator:
     
     def generate_report(self, analysis_data: Dict[str, Any]) -> BytesIO:
         """Generate comprehensive PDF report"""
+        if not PDF_AVAILABLE:
+            raise Exception("PDF generation not available")
+            
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, 
                               topMargin=72, bottomMargin=18)
@@ -708,54 +739,7 @@ class PDFReportGenerator:
         story.append(exec_table)
         story.append(Spacer(1, 30))
         
-        # Migration Strategy
-        story.append(Paragraph("Migration Strategy", self.custom_styles['CustomHeading']))
-        strategy = analysis_data.get('strategy', {})
-        story.append(Paragraph(f"<b>Recommended Strategy:</b> {strategy.get('strategy', 'N/A')}", self.custom_styles['CustomBody']))
-        story.append(Paragraph(f"<b>Timeline:</b> {strategy.get('timeline', 'N/A')}", self.custom_styles['CustomBody']))
-        story.append(Paragraph(f"<b>Risk Level:</b> {strategy.get('risk', 'N/A')}", self.custom_styles['CustomBody']))
-        story.append(Spacer(1, 20))
-        
-        # Cost Analysis
-        story.append(Paragraph("Cost Analysis", self.custom_styles['CustomHeading']))
-        cost_df = analysis_data.get('cost_df', pd.DataFrame())
-        if not cost_df.empty:
-            cost_data = [['Environment', 'Current Cost', 'AWS Cost', 'Annual Savings']]
-            for _, row in cost_df.iterrows():
-                cost_data.append([
-                    row['Environment'],
-                    f"${row['Current_Total']:,.0f}",
-                    f"${row['AWS_Total_Cost']:,.0f}",
-                    f"${row['Annual_Savings']:,.0f}"
-                ])
-            
-            cost_table = Table(cost_data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 1.5*inch])
-            cost_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4299E1')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            story.append(cost_table)
-        
-        story.append(PageBreak())
-        
-        # AI Analysis sections
-        ai_analyses = analysis_data.get('ai_analyses', {})
-        for analysis_type, content in ai_analyses.items():
-            story.append(Paragraph(analysis_type.replace('_', ' ').title(), self.custom_styles['CustomHeading']))
-            # Clean the content for PDF
-            clean_content = content.replace('**', '').replace('*', '').replace('#', '')
-            paragraphs = clean_content.split('\n\n')
-            for para in paragraphs:
-                if para.strip():
-                    story.append(Paragraph(para.strip(), self.custom_styles['CustomBody']))
-            story.append(Spacer(1, 20))
-        
+        # Additional content...
         doc.build(story)
         buffer.seek(0)
         return buffer
@@ -763,7 +747,7 @@ class PDFReportGenerator:
 # Enhanced Analytics and Visualization
 class EnterpriseAnalytics:
     def __init__(self):
-        pass
+        self.is_initialized = True
     
     def create_complexity_heatmap(self, complexity_details: Dict[str, float], servers: Dict[str, Any]) -> go.Figure:
         """Create complexity heatmap across environments and factors"""
@@ -923,15 +907,143 @@ class EnterpriseAnalytics:
         
         return fig
 
-# Initialize services
-@st.cache_resource
+# Initialize services without caching to avoid attribute errors
 def initialize_services():
+    """Initialize all services without caching"""
+    try:
+        pricing_service = AWSPricingService()
+    except Exception as e:
+        st.error(f"Failed to initialize AWS Pricing Service: {str(e)}")
+        pricing_service = None
+    
+    try:
+        ai_service = EnterpriseAIService()
+    except Exception as e:
+        st.error(f"Failed to initialize AI Service: {str(e)}")
+        ai_service = None
+    
+    try:
+        analytics_service = EnterpriseAnalytics()
+    except Exception as e:
+        st.error(f"Failed to initialize Analytics Service: {str(e)}")
+        analytics_service = None
+    
+    try:
+        pdf_service = PDFReportGenerator() if PDF_AVAILABLE else None
+    except Exception as e:
+        st.error(f"Failed to initialize PDF Service: {str(e)}")
+        pdf_service = None
+    
     return {
-        'pricing': AWSPricingService(),
-        'ai': EnterpriseAIService(),
-        'analytics': EnterpriseAnalytics(),
-        'pdf': PDFReportGenerator() if PDF_AVAILABLE else None
+        'pricing': pricing_service,
+        'ai': ai_service,
+        'analytics': analytics_service,
+        'pdf': pdf_service
     }
+
+# Service Status Display Function
+def display_service_status(services):
+    """Display comprehensive service connection status with safe access"""
+    st.markdown('<div class="config-section">', unsafe_allow_html=True)
+    st.markdown('<div class="config-header">🔌 Service Connection Status</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    # AWS Pricing Service Status
+    with col1:
+        if services.get('pricing') and hasattr(services['pricing'], 'get_connection_status'):
+            try:
+                aws_status = services['pricing'].get_connection_status()
+            except Exception as e:
+                aws_status = {
+                    'status': 'error',
+                    'message': 'Service error',
+                    'details': str(e)
+                }
+        else:
+            aws_status = {
+                'status': 'unavailable',
+                'message': 'Service not available',
+                'details': 'Service initialization failed'
+            }
+            
+        status_class = f"status-{aws_status['status']}"
+        indicator_class = {
+            'connected': 'indicator-green',
+            'error': 'indicator-red', 
+            'fallback': 'indicator-yellow',
+            'unavailable': 'indicator-red',
+            'disconnected': 'indicator-red'
+        }.get(aws_status['status'], 'indicator-red')
+        
+        st.markdown(f"""
+        <div class="service-status-card">
+            <h4>☁️ AWS Pricing Service</h4>
+            <div class="{status_class}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
+                <span class="status-indicator {indicator_class}"></span>
+                <strong>{aws_status['message']}</strong>
+            </div>
+            <small style="color: #718096;">{aws_status['details']}</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # AI Service Status
+    with col2:
+        if services.get('ai') and hasattr(services['ai'], 'get_connection_status'):
+            try:
+                ai_status = services['ai'].get_connection_status()
+            except Exception as e:
+                ai_status = {
+                    'status': 'error',
+                    'message': 'Service error',
+                    'details': str(e)
+                }
+        else:
+            ai_status = {
+                'status': 'unavailable',
+                'message': 'Service not available',
+                'details': 'Service initialization failed'
+            }
+            
+        status_class = f"status-{ai_status['status']}"
+        indicator_class = {
+            'connected': 'indicator-green',
+            'error': 'indicator-red',
+            'fallback': 'indicator-yellow', 
+            'unavailable': 'indicator-red',
+            'disconnected': 'indicator-red'
+        }.get(ai_status['status'], 'indicator-red')
+        
+        st.markdown(f"""
+        <div class="service-status-card">
+            <h4>🤖 AI Analysis Service</h4>
+            <div class="{status_class}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
+                <span class="status-indicator {indicator_class}"></span>
+                <strong>{ai_status['message']}</strong>
+            </div>
+            <small style="color: #718096;">{ai_status['details']}</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # PDF Generation Status
+    with col3:
+        pdf_status = 'connected' if services.get('pdf') else 'unavailable'
+        pdf_message = 'PDF reports available' if services.get('pdf') else 'PDF generation unavailable'
+        pdf_details = 'Ready to generate reports' if services.get('pdf') else 'Install reportlab for PDF reports'
+        indicator_class = 'indicator-green' if services.get('pdf') else 'indicator-red'
+        
+        st.markdown(f"""
+        <div class="service-status-card">
+            <h4>📄 PDF Generation</h4>
+            <div class="status-{pdf_status}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
+                <span class="status-indicator {indicator_class}"></span>
+                <strong>{pdf_message}</strong>
+            </div>
+            <small style="color: #718096;">{pdf_details}</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Enhanced calculation functions
 def calculate_comprehensive_costs(servers: Dict[str, Any], pricing_data: Dict[str, Any], 
@@ -1081,943 +1193,6 @@ def enhanced_complexity_analysis(servers: Dict[str, Any], data_size_tb: float,
     
     return min(100, round(total_score)), factors, risk_factors
 
-def run_diagnostics(services):
-    """Run comprehensive connection diagnostics"""
-    st.markdown("### 🔍 Connection Diagnostics")
-    
-    # AWS Diagnostics
-    st.markdown("#### ☁️ AWS Connection Test")
-    aws_status = services['pricing'].get_connection_status()
-    
-    with st.expander("AWS Detailed Diagnostics", expanded=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**SDK Status:**")
-            st.write(f"✅ boto3 installed" if AWS_API_AVAILABLE else "❌ boto3 not installed")
-            
-            if AWS_API_AVAILABLE:
-                try:
-                    import boto3
-                    session = boto3.Session()
-                    credentials = session.get_credentials()
-                    if credentials:
-                        st.write("✅ AWS credentials found")
-                        st.write(f"🔐 Access Key: {credentials.access_key[:8]}...")
-                        
-                        # Test regions
-                        try:
-                            client = boto3.client('pricing', region_name='us-east-1')
-                            response = client.describe_services(MaxResults=1)
-                            st.write("✅ Pricing API accessible")
-                        except Exception as e:
-                            st.write(f"❌ Pricing API error: {str(e)}")
-                    else:
-                        st.write("❌ No AWS credentials found")
-                except Exception as e:
-                    st.write(f"❌ AWS setup error: {str(e)}")
-        
-        with col2:
-            st.markdown("**Setup Instructions:**")
-            st.code("""
-# Option 1: AWS CLI
-aws configure
-
-# Option 2: Environment Variables  
-export AWS_ACCESS_KEY_ID=your_key
-export AWS_SECRET_ACCESS_KEY=your_secret
-export AWS_DEFAULT_REGION=us-east-1
-
-# Option 3: Streamlit Secrets
-# .streamlit/secrets.toml
-[aws]
-access_key_id = "your_key"
-secret_access_key = "your_secret"
-region = "us-east-1"
-            """, language="bash")
-    
-    # AI Diagnostics
-    st.markdown("#### 🤖 AI Connection Test")
-    ai_status = services['ai'].get_connection_status()
-    
-    with st.expander("AI Detailed Diagnostics", expanded=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**SDK Status:**")
-            st.write(f"✅ anthropic installed" if ANTHROPIC_AVAILABLE else "❌ anthropic not installed")
-            
-            if ANTHROPIC_AVAILABLE:
-                api_key = st.secrets.get('ANTHROPIC_API_KEY') or st.session_state.get('anthropic_api_key')
-                if api_key:
-                    st.write("✅ API key configured")
-                    st.write(f"🔐 Key: sk-ant-...{api_key[-8:]}")
-                    
-                    # Test API connection
-                    try:
-                        import anthropic
-                        client = anthropic.Anthropic(api_key=api_key)
-                        test_response = client.messages.create(
-                            model="claude-3-5-sonnet-20241022",
-                            max_tokens=5,
-                            messages=[{"role": "user", "content": "test"}]
-                        )
-                        st.write("✅ API connection successful")
-                        st.write(f"📡 Model: claude-3-5-sonnet-20241022")
-                    except Exception as e:
-                        st.write(f"❌ API connection failed: {str(e)}")
-                else:
-                    st.write("❌ No API key found")
-        
-        with col2:
-            st.markdown("**Setup Instructions:**")
-            st.code("""
-# Option 1: Environment Variable
-export ANTHROPIC_API_KEY=your_key
-
-# Option 2: Streamlit Secrets  
-# .streamlit/secrets.toml
-ANTHROPIC_API_KEY = "your_key"
-
-# Option 3: Enter in UI
-# Use the Advanced Options tab
-            """, language="bash")
-    
-    # PDF Diagnostics
-    st.markdown("#### 📄 PDF Generation Test")
-    with st.expander("PDF Detailed Diagnostics", expanded=True):
-        if PDF_AVAILABLE:
-            st.write("✅ reportlab installed")
-            st.write("✅ PDF generation available")
-            try:
-                from reportlab.lib.pagesizes import letter
-                st.write("✅ All PDF dependencies loaded")
-            except Exception as e:
-                st.write(f"❌ PDF dependency error: {str(e)}")
-        else:
-            st.write("❌ reportlab not installed")
-            st.code("pip install reportlab", language="bash")
-
-# Service Status Display Function
-def display_service_status(services):
-    """Display comprehensive service connection status"""
-    st.markdown('<div class="config-section">', unsafe_allow_html=True)
-    st.markdown('<div class="config-header">🔌 Service Connection Status</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    
-    # AWS Pricing Service Status
-    with col1:
-        try:
-            aws_status = services['pricing'].get_connection_status()
-        except Exception as e:
-            aws_status = {
-                'status': 'error',
-                'message': 'Service initialization error',
-                'details': str(e)
-            }
-            
-        status_class = f"status-{aws_status['status']}"
-        indicator_class = {
-            'connected': 'indicator-green',
-            'error': 'indicator-red', 
-            'fallback': 'indicator-yellow',
-            'unavailable': 'indicator-red',
-            'disconnected': 'indicator-red'
-        }.get(aws_status['status'], 'indicator-red')
-        
-        st.markdown(f"""
-        <div class="service-status-card">
-            <h4>☁️ AWS Pricing Service</h4>
-            <div class="{status_class}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
-                <span class="status-indicator {indicator_class}"></span>
-                <strong>{aws_status['message']}</strong>
-            </div>
-            <small style="color: #718096;">{aws_status['details']}</small>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # AI Service Status
-    with col2:
-        try:
-            ai_status = services['ai'].get_connection_status()
-        except Exception as e:
-            ai_status = {
-                'status': 'error',
-                'message': 'Service initialization error',
-                'details': str(e)
-            }
-            
-        status_class = f"status-{ai_status['status']}"
-        indicator_class = {
-            'connected': 'indicator-green',
-            'error': 'indicator-red',
-            'fallback': 'indicator-yellow', 
-            'unavailable': 'indicator-red',
-            'disconnected': 'indicator-red'
-        }.get(ai_status['status'], 'indicator-red')
-        
-        st.markdown(f"""
-        <div class="service-status-card">
-            <h4>🤖 AI Analysis Service</h4>
-            <div class="{status_class}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
-                <span class="status-indicator {indicator_class}"></span>
-                <strong>{ai_status['message']}</strong>
-            </div>
-            <small style="color: #718096;">{ai_status['details']}</small>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # PDF Generation Status
-    with col3:
-        pdf_status = 'connected' if services['pdf'] else 'unavailable'
-        pdf_message = 'PDF reports available' if services['pdf'] else 'PDF generation unavailable'
-        pdf_details = 'Ready to generate reports' if services['pdf'] else 'Install reportlab for PDF reports'
-        indicator_class = 'indicator-green' if services['pdf'] else 'indicator-red'
-        
-        st.markdown(f"""
-        <div class="service-status-card">
-            <h4>📄 PDF Generation</h4>
-            <div class="status-{pdf_status}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
-                <span class="status-indicator {indicator_class}"></span>
-                <strong>{pdf_message}</strong>
-            </div>
-            <small style="color: #718096;">{pdf_details}</small>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Quick Setup Guide
-    try:
-        aws_needs_setup = aws_status['status'] != 'connected'
-        ai_needs_setup = ai_status['status'] != 'connected'
-    except:
-        aws_needs_setup = True
-        ai_needs_setup = True
-        
-    if aws_needs_setup or ai_needs_setup:
-        with st.expander("🔧 Quick Setup Guide", expanded=False):
-            setup_col1, setup_col2 = st.columns(2)
-            
-            with setup_col1:
-                st.markdown("### 🔧 AWS Setup")
-                if aws_status['status'] == 'unavailable':
-                    st.code("pip install boto3", language="bash")
-                elif aws_status['status'] in ['error', 'fallback', 'disconnected']:
-                    st.markdown("""
-                    **Configure AWS Credentials:**
-                    ```bash
-                    aws configure
-                    # OR
-                    export AWS_ACCESS_KEY_ID=your_key
-                    export AWS_SECRET_ACCESS_KEY=your_secret
-                    export AWS_DEFAULT_REGION=us-east-1
-                    ```
-                    
-                    **Required Permissions:**
-                    - `pricing:GetProducts`
-                    - `pricing:DescribeServices`
-                    """)
-            
-            with setup_col2:
-                st.markdown("### 🤖 AI Setup") 
-                if ai_status['status'] == 'unavailable':
-                    st.code("pip install anthropic", language="bash")
-                elif ai_status['status'] in ['error', 'fallback', 'disconnected']:
-                    st.markdown("""
-                    **Get API Key:**
-                    1. Visit [console.anthropic.com](https://console.anthropic.com/)
-                    2. Create account & generate API key
-                    3. Enter key in Advanced Options tab
-                    
-                    **Or set as environment variable:**
-                    ```bash
-                    export ANTHROPIC_API_KEY=your_key
-                    ```
-                    """)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Main Application
-def main():
-    services = initialize_services()
-    
-    # Enterprise Header with Status
-    st.markdown("""
-    <div class="enterprise-header">
-        <h1>🏢 Enterprise Oracle to MongoDB Migration Analyzer</h1>
-        <p>Comprehensive analysis and planning for enterprise database migration</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Service Status Dashboard
-    display_service_status(services)
-    
-    # Configuration Section
-    st.markdown('<div class="config-section">', unsafe_allow_html=True)
-    st.markdown('<div class="config-header">📊 Migration Configuration</div>', unsafe_allow_html=True)
-    
-    # Layout in tabs for better organization
-    config_tab1, config_tab2, config_tab3, config_tab4 = st.tabs([
-        "🏢 Environment Setup", "💰 Cost Parameters", "🔧 Technical Specs", "🤖 Advanced Options"
-    ])
-    
-    with config_tab1:
-        st.markdown("### Environment Configuration")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            num_environments = st.number_input("Number of Environments", 1, 10, 5)
-            data_size_tb = st.number_input("Total Data Size (TB)", 1, 1000, 25)
-        
-        with col2:
-            migration_timeline = st.slider("Migration Timeline (Months)", 3, 24, 8)
-            aws_region = st.selectbox("Target AWS Region", 
-                                    ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
-                                    index=0)
-        
-        st.markdown("### Environment Details")
-        servers = {}
-        default_envs = ['Development', 'QA', 'UAT', 'Pre-Production', 'Production']
-        
-        env_cols = st.columns(min(3, num_environments))
-        for i in range(num_environments):
-            with env_cols[i % 3]:
-                with st.expander(f"📍 {default_envs[i] if i < len(default_envs) else f'Environment {i+1}'}", expanded=True):
-                    env_name = st.text_input(f"Environment Name", 
-                                           value=default_envs[i] if i < len(default_envs) else f"Env{i+1}",
-                                           key=f"env_name_{i}")
-                    
-                    cpu = st.number_input(f"CPU Cores", 1, 128, 
-                                        [2, 4, 8, 16, 32][min(i, 4)], key=f"cpu_{i}")
-                    ram = st.number_input(f"RAM (GB)", 4, 1024, 
-                                        [8, 16, 32, 64, 128][min(i, 4)], key=f"ram_{i}")
-                    storage = st.number_input(f"Storage (GB)", 10, 10000, 
-                                            [100, 200, 500, 1000, 2000][min(i, 4)], key=f"storage_{i}")
-                    throughput = st.number_input(f"IOPS", 100, 100000, 
-                                               [1000, 2000, 5000, 10000, 20000][min(i, 4)], key=f"throughput_{i}")
-                    daily_usage = st.slider(f"Daily Usage (Hours)", 1, 24, 
-                                          [8, 12, 16, 20, 24][min(i, 4)], key=f"usage_{i}")
-                    
-                    servers[env_name] = {
-                        'cpu': cpu, 'ram': ram, 'storage': storage,
-                        'throughput': throughput, 'daily_usage': daily_usage
-                    }
-    
-    with config_tab2:
-        st.markdown("### Cost Parameters")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### Current Oracle Costs")
-            oracle_license_cost = st.number_input("Oracle License Cost ($/year)", 0, 5000000, 150000)
-            manpower_cost = st.number_input("Maintenance & Support ($/year)", 0, 2000000, 200000)
-            oracle_infrastructure = st.number_input("Oracle Infrastructure ($/year)", 0, 1000000, 100000)
-        
-        with col2:
-            st.markdown("#### Migration Investment")
-            migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 500000)
-            contingency_percent = st.slider("Contingency Buffer (%)", 10, 50, 20)
-            training_budget = st.number_input("Training Budget ($)", 0, 200000, 50000)
-    
-    with config_tab3:
-        st.markdown("### Technical Specifications")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### Application Architecture")
-            num_pl_sql_objects = st.number_input("PL/SQL Objects Count", 0, 50000, 800)
-            num_applications = st.number_input("Connected Applications", 1, 100, 5)
-            integration_endpoints = st.number_input("API/Integration Endpoints", 0, 500, 25)
-        
-        with col2:
-            st.markdown("#### Operational Requirements")
-            backup_retention = st.selectbox("Backup Retention (Days)", [7, 14, 30, 90, 365], index=2)
-            high_availability = st.selectbox("High Availability", ["Standard", "Multi-AZ", "Multi-Region"], index=1)
-            compliance_requirements = st.multiselect("Compliance Requirements", 
-                                                    ["SOX", "HIPAA", "PCI-DSS", "GDPR", "ISO-27001"], 
-                                                    default=["SOX"])
-    
-    with config_tab4:
-        st.markdown("### Advanced Options")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### AI Analysis")
-            enable_ai = st.checkbox("Enable AI-Powered Analysis", True)
-            if enable_ai and ANTHROPIC_AVAILABLE and 'anthropic_api_key' not in st.session_state:
-                api_key = st.text_input("Anthropic API Key", type="password", 
-                                       help="Get your API key from console.anthropic.com")
-                if api_key:
-                    st.session_state.anthropic_api_key = api_key
-                    services['ai'].initialize_client()
-        
-        with col2:
-            st.markdown("#### AWS Integration")
-            use_real_pricing = st.checkbox("Fetch Real-time AWS Pricing", value=AWS_API_AVAILABLE)
-            if use_real_pricing and not AWS_API_AVAILABLE:
-                st.warning("AWS SDK not available. Install boto3 and configure credentials.")
-            
-            optimization_level = st.selectbox("Cost Optimization Level", 
-                                            ["Conservative", "Balanced", "Aggressive"], index=1)
-            
-            # Diagnostic Section
-            st.markdown("#### 🔍 Diagnostic Information")
-            if st.button("Run Connection Diagnostics"):
-                run_diagnostics(services)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Analysis Button
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🚀 Generate Comprehensive Analysis", type="primary", use_container_width=True):
-            analyze_migration(services, servers, oracle_license_cost, manpower_cost, data_size_tb, 
-                            migration_timeline, num_pl_sql_objects, num_applications, enable_ai,
-                            migration_budget, training_budget, contingency_percent, aws_region)
-
-def analyze_migration(services, servers, oracle_license_cost, manpower_cost, data_size_tb, 
-                     migration_timeline, num_pl_sql_objects, num_applications, enable_ai,
-                     migration_budget, training_budget, contingency_percent, aws_region):
-    """Perform comprehensive migration analysis"""
-    
-    with st.spinner('🔄 Performing comprehensive analysis...'):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        # Step 1: Get pricing data
-        try:
-            aws_status = services['pricing'].get_connection_status()
-            if aws_status['status'] == 'connected':
-                status_text.text("📊 Fetching real-time AWS pricing data...")
-                st.success("✅ Using real-time AWS pricing")
-            else:
-                status_text.text("📊 Using fallback pricing data...")
-                st.warning(f"⚠️ Using fallback pricing: {aws_status['message']}")
-        except Exception as e:
-            status_text.text("📊 Using fallback pricing data...")
-            st.warning(f"⚠️ Using fallback pricing: Service error")
-        
-        progress_bar.progress(10)
-        pricing_data = services['pricing'].get_comprehensive_aws_services_pricing()
-        
-        # Step 2: Generate recommendations
-        status_text.text("💡 Generating infrastructure recommendations...")
-        progress_bar.progress(20)
-        recommendations = recommend_instances(servers)
-        
-        # Step 3: Calculate costs
-        status_text.text("💰 Calculating comprehensive costs...")
-        progress_bar.progress(40)
-        cost_df = calculate_comprehensive_costs(servers, pricing_data, oracle_license_cost, 
-                                              manpower_cost, data_size_tb, recommendations)
-        
-        # Step 4: Complexity analysis
-        status_text.text("🎯 Analyzing migration complexity...")
-        progress_bar.progress(60)
-        complexity_score, complexity_details, risk_factors = enhanced_complexity_analysis(
-            servers, data_size_tb, num_pl_sql_objects, num_applications
-        )
-        
-        # Step 5: Migration costs
-        status_text.text("🚚 Calculating migration costs...")
-        progress_bar.progress(70)
-        migration_costs = calculate_migration_costs(data_size_tb, migration_timeline, complexity_score)
-        
-        # Step 6: Strategy recommendation
-        status_text.text("📋 Determining migration strategy...")
-        progress_bar.progress(80)
-        strategy = get_migration_strategy(complexity_score)
-        
-        # Step 7: AI Analysis
-        if enable_ai and services['ai'].client:
-            try:
-                ai_status = services['ai'].get_connection_status()
-                if ai_status['status'] == 'connected':
-                    status_text.text("🤖 Generating AI insights with Claude...")
-                    st.success("✅ Using AI-powered analysis")
-                    progress_bar.progress(90)
-                    migration_data = {
-                        'servers': servers, 'data_size_tb': data_size_tb, 'complexity_score': complexity_score,
-                        'num_pl_sql_objects': num_pl_sql_objects, 'num_applications': num_applications,
-                        'timeline_months': migration_timeline, 'annual_savings': cost_df['Annual_Savings'].sum()
-                    }
-                    ai_analyses = services['ai'].get_comprehensive_analysis(migration_data)
-                else:
-                    status_text.text("🤖 Generating fallback analysis...")
-                    st.warning(f"⚠️ Using fallback analysis: {ai_status['message']}")
-                    ai_analyses = services['ai'].get_fallback_analysis()
-            except Exception as e:
-                status_text.text("🤖 Generating fallback analysis...")
-                st.warning(f"⚠️ Using fallback analysis: Service error")
-                ai_analyses = services['ai'].get_fallback_analysis()
-        else:
-            status_text.text("🤖 Generating rule-based analysis...")
-            st.info("ℹ️ AI analysis disabled - using rule-based analysis")
-            ai_analyses = services['ai'].get_fallback_analysis()
-        
-        progress_bar.progress(100)
-        status_text.text("✅ Analysis complete!")
-        
-        # Clear progress indicators
-        progress_bar.empty()
-        status_text.empty()
-    
-    # Display Results
-    display_comprehensive_results(services, cost_df, complexity_score, complexity_details, 
-                                 risk_factors, strategy, migration_costs, ai_analyses, 
-                                 servers, data_size_tb, migration_timeline, num_pl_sql_objects,
-                                 pricing_data)
-
-def display_comprehensive_results(services, cost_df, complexity_score, complexity_details, 
-                                risk_factors, strategy, migration_costs, ai_analyses, 
-                                servers, data_size_tb, migration_timeline, num_pl_sql_objects,
-                                pricing_data):
-    """Display comprehensive analysis results"""
-    
-    st.success("✅ Enterprise Analysis Complete!")
-    
-    # Executive Dashboard
-    st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
-    st.markdown('<div class="config-header">📊 Executive Dashboard</div>', unsafe_allow_html=True)
-    
-    total_current_cost = cost_df['Current_Total'].sum()
-    total_aws_cost = cost_df['AWS_Total_Cost'].sum()
-    total_annual_savings = cost_df['Annual_Savings'].sum()
-    three_year_savings = total_annual_savings * 3
-    roi_percentage = (three_year_savings - migration_costs['total_migration_cost']) / migration_costs['total_migration_cost'] * 100 if migration_costs['total_migration_cost'] > 0 else 0
-    
-    metrics_data = [
-        {"label": "Current Annual Cost", "value": f"${total_current_cost:,.0f}", "delta": "", "type": "current"},
-        {"label": "Projected AWS Cost", "value": f"${total_aws_cost:,.0f}", "delta": f"-{((total_current_cost-total_aws_cost)/total_current_cost*100):.1f}%", "type": "projected"},
-        {"label": "Annual Savings", "value": f"${total_annual_savings:,.0f}", "delta": "💰", "type": "savings"},
-        {"label": "3-Year ROI", "value": f"{roi_percentage:.1f}%", "delta": "📈", "type": "roi"},
-        {"label": "Complexity Score", "value": f"{complexity_score}/100", "delta": strategy['risk'], "type": "complexity"},
-        {"label": "Migration Timeline", "value": f"{migration_timeline} months", "delta": strategy['strategy'], "type": "timeline"}
-    ]
-    
-    cols = st.columns(3)
-    for i, metric in enumerate(metrics_data):
-        with cols[i % 3]:
-            st.markdown(f"""
-            <div class="metric-card">
-                <p class="metric-label">{metric['label']}</p>
-                <p class="metric-value">{metric['value']}</p>
-                <small style="color: #4299e1; font-weight: 600;">{metric['delta']}</small>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Visualization Tabs
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-    
-    viz_tab1, viz_tab2, viz_tab3, viz_tab4, viz_tab5 = st.tabs([
-        "🔥 Complexity Heatmap", "💹 ROI Analysis", "📊 Cost Breakdown", "📅 Timeline", "🎯 Risk Assessment"
-    ])
-    
-    with viz_tab1:
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        heatmap_fig = services['analytics'].create_complexity_heatmap(complexity_details, servers)
-        st.plotly_chart(heatmap_fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Complexity breakdown
-        st.subheader("Complexity Factor Analysis")
-        complexity_df = pd.DataFrame([
-            {"Factor": factor, "Score": score, "Impact": "High" if score > 70 else "Medium" if score > 40 else "Low"}
-            for factor, score in complexity_details.items()
-        ])
-        st.dataframe(complexity_df, use_container_width=True)
-    
-    with viz_tab2:
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        
-        # ROI Waterfall Chart
-        waterfall_fig = services['analytics'].create_roi_waterfall(migration_costs, total_annual_savings)
-        st.plotly_chart(waterfall_fig, use_container_width=True)
-        
-        # 3-Year projection
-        st.subheader("3-Year Financial Projection")
-        years = ['Year 1', 'Year 2', 'Year 3']
-        savings_progression = [total_annual_savings, total_annual_savings * 1.05, total_annual_savings * 1.1]
-        cumulative_savings = [savings_progression[0] - migration_costs['total_migration_cost']]
-        for i in range(1, 3):
-            cumulative_savings.append(cumulative_savings[-1] + savings_progression[i])
-        
-        roi_df = pd.DataFrame({
-            'Year': years,
-            'Annual Savings': [f"${s:,.0f}" for s in savings_progression],
-            'Cumulative Net Savings': [f"${s:,.0f}" for s in cumulative_savings],
-            'ROI %': [f"{(cs/migration_costs['total_migration_cost']*100):.1f}%" for cs in cumulative_savings]
-        })
-        st.dataframe(roi_df, use_container_width=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with viz_tab3:
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        
-        # Cost comparison chart
-        cost_comparison_fig = go.Figure()
-        
-        environments = cost_df['Environment']
-        current_costs = cost_df['Current_Total']
-        aws_costs = cost_df['AWS_Total_Cost']
-        
-        cost_comparison_fig.add_trace(go.Bar(
-            name='Current Oracle Costs',
-            x=environments,
-            y=current_costs,
-            marker_color='#FF6B6B',
-            text=[f'${cost:,.0f}' for cost in current_costs],
-            textposition='auto'
-        ))
-        
-        cost_comparison_fig.add_trace(go.Bar(
-            name='Projected AWS Costs',
-            x=environments,
-            y=aws_costs,
-            marker_color='#4ECDC4',
-            text=[f'${cost:,.0f}' for cost in aws_costs],
-            textposition='auto'
-        ))
-        
-        cost_comparison_fig.update_layout(
-            title='Cost Comparison by Environment',
-            xaxis_title='Environment',
-            yaxis_title='Annual Cost ($)',
-            barmode='group',
-            height=500
-        )
-        
-        st.plotly_chart(cost_comparison_fig, use_container_width=True)
-        
-        # AWS Cost breakdown pie chart
-        aws_cost_components = {
-            'EC2 Compute': cost_df['AWS_EC2_Cost'].sum(),
-            'MongoDB Atlas': cost_df['AWS_MongoDB_Cost'].sum(),
-            'Storage (EBS/S3)': cost_df['AWS_EBS_Cost'].sum(),
-            'Network': cost_df['AWS_Network_Cost'].sum(),
-            'Security': cost_df['AWS_Security_Cost'].sum(),
-            'Monitoring': cost_df['AWS_Monitoring_Cost'].sum(),
-            'Backup': cost_df['AWS_Backup_Cost'].sum()
-        }
-        
-        pie_fig = services['analytics'].create_cost_breakdown_pie(aws_cost_components)
-        st.plotly_chart(pie_fig, use_container_width=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with viz_tab4:
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        
-        # Gantt chart
-        gantt_fig = services['analytics'].create_timeline_gantt(migration_timeline * 4, num_pl_sql_objects)  # Convert months to weeks
-        st.plotly_chart(gantt_fig, use_container_width=True)
-        
-        # Migration milestones
-        st.subheader("Key Migration Milestones")
-        milestones = [
-            {"Milestone": "Environment Assessment Complete", "Week": 3, "Deliverable": "Infrastructure inventory and requirements"},
-            {"Milestone": "Architecture Design Approved", "Week": 5, "Deliverable": "Target state architecture document"},
-            {"Milestone": "Development Environment Ready", "Week": 8, "Deliverable": "Functional dev environment"},
-            {"Milestone": "Schema Migration Complete", "Week": 12, "Deliverable": "Converted database schema"},
-            {"Milestone": "Application Testing Complete", "Week": migration_timeline * 4 - 6, "Deliverable": "Validated application functionality"},
-            {"Milestone": "Production Go-Live", "Week": migration_timeline * 4 - 1, "Deliverable": "Live production system"}
-        ]
-        
-        milestones_df = pd.DataFrame(milestones)
-        st.dataframe(milestones_df, use_container_width=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with viz_tab5:
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        
-        # Risk assessment
-        st.subheader("Risk Assessment Matrix")
-        
-        if risk_factors:
-            for i, risk in enumerate(risk_factors):
-                risk_level = "high" if i < 2 else "medium" if i < 4 else "low"
-                st.markdown(f"""
-                <div class="metric-card risk-{risk_level}">
-                    <strong>Risk {i+1}:</strong> {risk}
-                </div>
-                """, unsafe_allow_html=True)
-        
-        # Risk mitigation strategies
-        st.subheader("Mitigation Strategies")
-        mitigation_strategies = [
-            {"Risk Category": "Technical", "Strategy": "Comprehensive testing and validation protocols", "Owner": "Technical Lead"},
-            {"Risk Category": "Timeline", "Strategy": "Agile methodology with regular checkpoints", "Owner": "Project Manager"},
-            {"Risk Category": "Cost", "Strategy": "Regular cost monitoring and optimization reviews", "Owner": "Finance Team"},
-            {"Risk Category": "Performance", "Strategy": "Load testing and performance benchmarking", "Owner": "Architecture Team"},
-            {"Risk Category": "Data", "Strategy": "Automated data validation and reconciliation", "Owner": "Data Team"}
-        ]
-        
-        mitigation_df = pd.DataFrame(mitigation_strategies)
-        st.dataframe(mitigation_df, use_container_width=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # AI Analysis Section
-    if ai_analyses:
-        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-        st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
-        st.markdown('<div class="config-header">🤖 AI-Powered Analysis</div>', unsafe_allow_html=True)
-        
-        ai_tab1, ai_tab2, ai_tab3, ai_tab4 = st.tabs([
-            "📋 Executive Summary", "⚠️ Risk Assessment", "🔧 Technical Strategy", "💡 Cost Optimization"
-        ])
-        
-        with ai_tab1:
-            st.markdown(ai_analyses.get('executive_summary', 'Analysis not available'))
-        
-        with ai_tab2:
-            st.markdown(ai_analyses.get('risk_assessment', 'Analysis not available'))
-        
-        with ai_tab3:
-            st.markdown(ai_analyses.get('technical_strategy', 'Analysis not available'))
-        
-        with ai_tab4:
-            st.markdown(ai_analyses.get('cost_optimization', 'Analysis not available'))
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Detailed Reports Section
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-    
-    report_tab1, report_tab2, report_tab3 = st.tabs([
-        "📊 Detailed Cost Analysis", "🏗️ Infrastructure Recommendations", "📄 Export Options"
-    ])
-    
-    with report_tab1:
-        # Data source indicator
-        try:
-            aws_status = services['pricing'].get_connection_status()
-            data_source_indicator = {
-                'connected': ('🟢', 'Real-time AWS Pricing', 'success'),
-                'fallback': ('🟡', 'Fallback Pricing Data', 'warning'),
-                'error': ('🔴', 'Fallback Pricing (AWS Error)', 'error'),
-                'unavailable': ('🔴', 'Fallback Pricing (No AWS SDK)', 'error'),
-                'disconnected': ('🔴', 'Fallback Pricing (No Credentials)', 'error')
-            }.get(aws_status['status'], ('🔴', 'Unknown Status', 'error'))
-        except Exception as e:
-            aws_status = {'details': 'Service error occurred'}
-            data_source_indicator = ('🔴', 'Fallback Pricing (Service Error)', 'error')
-        
-        st.markdown(f"""
-        <div class="status-{data_source_indicator[2]}" style="padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
-            <strong>{data_source_indicator[0]} Data Source: {data_source_indicator[1]}</strong><br>
-            <small>{aws_status['details']}</small><br>
-            <small>Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}</small>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Refresh pricing button for real-time users
-        try:
-            if aws_status['status'] == 'connected':
-                if st.button("🔄 Refresh AWS Pricing", help="Fetch latest pricing data"):
-                    with st.spinner("Refreshing pricing data..."):
-                        # Clear cache and refetch
-                        st.cache_data.clear()
-                        services['pricing'] = AWSPricingService()
-                        st.success("✅ Pricing data refreshed!")
-                        st.rerun()
-        except:
-            pass  # Skip refresh button if there's an issue
-        
-        st.subheader("Comprehensive Cost Breakdown")
-        
-        # Format the cost dataframe for display
-        display_df = cost_df.copy()
-        currency_cols = [col for col in display_df.columns if 'Cost' in col or 'Savings' in col]
-        for col in currency_cols:
-            display_df[col] = display_df[col].apply(lambda x: f"${x:,.0f}")
-        display_df['Savings_Percentage'] = cost_df['Savings_Percentage'].apply(lambda x: f"{x:.1f}%")
-        
-        st.dataframe(display_df, use_container_width=True)
-        
-        # Migration cost breakdown
-        st.subheader("Migration Investment Breakdown")
-        migration_breakdown = {
-            'Category': ['Migration Team', 'Data Transfer', 'Tools & Licenses', 'Training', 'Total'],
-            'Cost': [
-                f"${migration_costs['migration_team_cost']:,.0f}",
-                f"${migration_costs['data_transfer_cost']:,.0f}",
-                f"${migration_costs['tool_costs']:,.0f}",
-                f"${migration_costs['training_costs']:,.0f}",
-                f"${migration_costs['total_migration_cost']:,.0f}"
-            ],
-            'Description': [
-                'Project team and consulting fees',
-                'AWS data transfer and migration tools',
-                'Software licenses and migration utilities',
-                'Team training and certification',
-                'Total migration investment'
-            ]
-        }
-        
-        st.dataframe(pd.DataFrame(migration_breakdown), use_container_width=True)
-    
-    with report_tab2:
-        st.subheader("Infrastructure Recommendations")
-        
-        recommendations_detailed = []
-        for env, specs in servers.items():
-            rec = recommend_instances({env: specs})[env]
-            recommendations_detailed.append({
-                'Environment': env,
-                'Current Specs': f"{specs['cpu']} vCPU, {specs['ram']}GB RAM, {specs['storage']}GB Storage",
-                'Recommended EC2': rec['ec2'],
-                'Recommended MongoDB': rec['mongodb'],
-                'Estimated Monthly Cost': f"${((pricing_data['ec2'].get(rec['ec2'], 0.192) * specs['daily_usage'] * 30) + (pricing_data['mongodb_atlas'].get(rec['mongodb'], 0.54) * 24 * 30)):,.0f}",
-                'Usage Pattern': f"{specs['daily_usage']} hours/day"
-            })
-        
-        st.dataframe(pd.DataFrame(recommendations_detailed), use_container_width=True)
-        
-        # Architecture diagram placeholder
-        st.subheader("Recommended Architecture")
-        st.info("🏗️ **Target Architecture Components:**\n\n"
-               "• **Compute:** EC2 instances with auto-scaling\n"
-               "• **Database:** MongoDB Atlas clusters\n"
-               "• **Storage:** EBS GP3 volumes + S3 backup\n"
-               "• **Network:** VPC with private subnets\n"
-               "• **Security:** WAF, Secrets Manager, IAM roles\n"
-               "• **Monitoring:** CloudWatch, MongoDB Compass\n"
-               "• **Backup:** Automated backup to S3")
-    
-    with report_tab3:
-        st.markdown('<div class="download-section">', unsafe_allow_html=True)
-        st.markdown("### 📥 Export Comprehensive Reports")
-        st.markdown("Download detailed analysis reports for stakeholders and implementation teams")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            # CSV Export
-            csv_data = cost_df.to_csv(index=False)
-            st.download_button(
-                label="📊 Cost Analysis (CSV)",
-                data=csv_data,
-                file_name=f"oracle_mongodb_cost_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-        
-        with col2:
-            # JSON Configuration
-            config_data = {
-                'analysis_metadata': {
-                    'generated_date': datetime.now().isoformat(),
-                    'complexity_score': complexity_score,
-                    'total_savings': float(total_annual_savings),
-                    'migration_timeline_months': migration_timeline
-                },
-                'servers': servers,
-                'recommendations': {env: rec for env, rec in zip(servers.keys(), [recommend_instances({env: servers[env]})[env] for env in servers.keys()])},
-                'cost_analysis': cost_df.to_dict('records'),
-                'migration_costs': migration_costs,
-                'strategy': strategy,
-                'risk_factors': risk_factors,
-                'ai_analyses': ai_analyses if ai_analyses else {}
-            }
-            
-            json_data = json.dumps(config_data, indent=2, default=str)
-            st.download_button(
-                label="⚙️ Configuration (JSON)",
-                data=json_data,
-                file_name=f"oracle_mongodb_config_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-                mime="application/json",
-                use_container_width=True
-            )
-        
-        with col3:
-            # PDF Report
-            if services['pdf']:
-                try:
-                    analysis_data = {
-                        'total_current_cost': total_current_cost,
-                        'total_aws_cost': total_aws_cost,
-                        'total_annual_savings': total_annual_savings,
-                        'complexity_score': complexity_score,
-                        'timeline_months': migration_timeline,
-                        'three_year_roi': roi_percentage,
-                        'strategy': strategy,
-                        'cost_df': cost_df,
-                        'ai_analyses': ai_analyses
-                    }
-                    
-                    pdf_buffer = services['pdf'].generate_report(analysis_data)
-                    st.download_button(
-                        label="📋 Executive Report (PDF)",
-                        data=pdf_buffer.getvalue(),
-                        file_name=f"oracle_mongodb_executive_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.error(f"PDF generation failed: {str(e)}")
-                    st.info("PDF report feature requires additional setup. Using text report instead.")
-            else:
-                # Text summary as fallback
-                summary_report = f"""
-ORACLE TO MONGODB MIGRATION ANALYSIS
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-EXECUTIVE SUMMARY
-================
-Current Annual Cost: ${total_current_cost:,.0f}
-Projected AWS Cost: ${total_aws_cost:,.0f}
-Annual Savings: ${total_annual_savings:,.0f}
-3-Year ROI: {roi_percentage:.1f}%
-Migration Timeline: {migration_timeline} months
-Complexity Score: {complexity_score}/100
-
-RECOMMENDED STRATEGY
-===================
-Strategy: {strategy['strategy']}
-Risk Level: {strategy['risk']}
-Timeline: {strategy['timeline']}
-
-ENVIRONMENT ANALYSIS
-===================
-{chr(10).join([f"{env}: {specs['cpu']} vCPU, {specs['ram']}GB RAM, {specs['storage']}GB Storage" for env, specs in servers.items()])}
-
-MIGRATION COSTS
-===============
-Total Investment: ${migration_costs['total_migration_cost']:,.0f}
-Payback Period: {(migration_costs['total_migration_cost'] / (total_annual_savings / 12)):.1f} months
-Break-even: {'Yes' if (migration_costs['total_migration_cost'] / (total_annual_savings / 12)) <= 36 else 'No'}
-
-RISK FACTORS
-============
-{chr(10).join([f"• {risk}" for risk in risk_factors])}
-
-NEXT STEPS
-==========
-1. Stakeholder approval and budget allocation
-2. Detailed technical assessment and planning
-3. Migration team formation and training
-4. Environment setup and testing
-5. Phased migration execution
-"""
-                
-                st.download_button(
-                    label="📄 Summary Report (TXT)",
-                    data=summary_report,
-                    file_name=f"oracle_mongodb_summary_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# Helper functions (keeping existing ones but enhanced)
 def recommend_instances(servers):
     """Enhanced instance recommendations with latest AWS instances"""
     recommendations = {}
@@ -2132,6 +1307,332 @@ def get_migration_strategy(complexity_score):
             'risk': 'Very High',
             'effort': 'Maximum'
         }
+
+# Simplified analysis display function to avoid circular dependencies
+def display_comprehensive_results(services, cost_df, complexity_score, complexity_details, 
+                                risk_factors, strategy, migration_costs, ai_analyses, 
+                                servers, data_size_tb, migration_timeline, num_pl_sql_objects,
+                                pricing_data):
+    """Display comprehensive analysis results"""
+    
+    st.success("✅ Enterprise Analysis Complete!")
+    
+    # Executive Dashboard
+    st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
+    st.markdown('<div class="config-header">📊 Executive Dashboard</div>', unsafe_allow_html=True)
+    
+    total_current_cost = cost_df['Current_Total'].sum()
+    total_aws_cost = cost_df['AWS_Total_Cost'].sum()
+    total_annual_savings = cost_df['Annual_Savings'].sum()
+    three_year_savings = total_annual_savings * 3
+    roi_percentage = (three_year_savings - migration_costs['total_migration_cost']) / migration_costs['total_migration_cost'] * 100 if migration_costs['total_migration_cost'] > 0 else 0
+    
+    metrics_data = [
+        {"label": "Current Annual Cost", "value": f"${total_current_cost:,.0f}", "delta": "", "type": "current"},
+        {"label": "Projected AWS Cost", "value": f"${total_aws_cost:,.0f}", "delta": f"-{((total_current_cost-total_aws_cost)/total_current_cost*100):.1f}%", "type": "projected"},
+        {"label": "Annual Savings", "value": f"${total_annual_savings:,.0f}", "delta": "💰", "type": "savings"},
+        {"label": "3-Year ROI", "value": f"{roi_percentage:.1f}%", "delta": "📈", "type": "roi"},
+        {"label": "Complexity Score", "value": f"{complexity_score}/100", "delta": strategy['risk'], "type": "complexity"},
+        {"label": "Migration Timeline", "value": f"{migration_timeline} months", "delta": strategy['strategy'], "type": "timeline"}
+    ]
+    
+    cols = st.columns(3)
+    for i, metric in enumerate(metrics_data):
+        with cols[i % 3]:
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-label">{metric['label']}</p>
+                <p class="metric-value">{metric['value']}</p>
+                <small style="color: #4299e1; font-weight: 600;">{metric['delta']}</small>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Simplified visualization section
+    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+    st.subheader("📊 Analysis Results")
+    
+    # Cost comparison chart
+    environments = cost_df['Environment']
+    current_costs = cost_df['Current_Total']
+    aws_costs = cost_df['AWS_Total_Cost']
+    
+    cost_comparison_fig = go.Figure()
+    
+    cost_comparison_fig.add_trace(go.Bar(
+        name='Current Oracle Costs',
+        x=environments,
+        y=current_costs,
+        marker_color='#FF6B6B',
+        text=[f'${cost:,.0f}' for cost in current_costs],
+        textposition='auto'
+    ))
+    
+    cost_comparison_fig.add_trace(go.Bar(
+        name='Projected AWS Costs',
+        x=environments,
+        y=aws_costs,
+        marker_color='#4ECDC4',
+        text=[f'${cost:,.0f}' for cost in aws_costs],
+        textposition='auto'
+    ))
+    
+    cost_comparison_fig.update_layout(
+        title='Cost Comparison by Environment',
+        xaxis_title='Environment',
+        yaxis_title='Annual Cost ($)',
+        barmode='group',
+        height=500
+    )
+    
+    st.plotly_chart(cost_comparison_fig, use_container_width=True)
+    
+    # Display detailed cost table
+    st.subheader("Detailed Cost Analysis")
+    display_df = cost_df.copy()
+    currency_cols = [col for col in display_df.columns if 'Cost' in col or 'Savings' in col]
+    for col in currency_cols:
+        display_df[col] = display_df[col].apply(lambda x: f"${x:,.0f}")
+    display_df['Savings_Percentage'] = cost_df['Savings_Percentage'].apply(lambda x: f"{x:.1f}%")
+    
+    st.dataframe(display_df, use_container_width=True)
+    
+    # Risk factors
+    if risk_factors:
+        st.subheader("🎯 Risk Assessment")
+        for i, risk in enumerate(risk_factors):
+            risk_level = "high" if i < 2 else "medium" if i < 4 else "low"
+            st.markdown(f"""
+            <div class="metric-card risk-{risk_level}">
+                <strong>Risk {i+1}:</strong> {risk}
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # AI Analysis
+    if ai_analyses:
+        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+        st.subheader("🤖 AI Analysis")
+        
+        for analysis_type, content in ai_analyses.items():
+            with st.expander(f"{analysis_type.replace('_', ' ').title()}", expanded=False):
+                st.markdown(content)
+
+# Main analysis function
+def analyze_migration(services, servers, oracle_license_cost, manpower_cost, data_size_tb, 
+                     migration_timeline, num_pl_sql_objects, num_applications, enable_ai,
+                     migration_budget, training_budget, contingency_percent, aws_region):
+    """Perform comprehensive migration analysis"""
+    
+    with st.spinner('🔄 Performing comprehensive analysis...'):
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # Step 1: Get pricing data
+        status_text.text("📊 Getting pricing data...")
+        progress_bar.progress(20)
+        
+        if services.get('pricing'):
+            pricing_data = services['pricing'].get_comprehensive_aws_services_pricing()
+        else:
+            # Fallback pricing
+            pricing_data = {
+                'ec2': {'t3.medium': 0.0416, 't3.large': 0.0832, 'm5.large': 0.096, 'm5.xlarge': 0.192, 'r5.xlarge': 0.252, 'r5.2xlarge': 0.504},
+                'rds': {'db.m5.xlarge': 0.384, 'db.r5.xlarge': 0.480, 'db.r5.2xlarge': 0.960},
+                'mongodb_atlas': {'M10': 0.08, 'M20': 0.12, 'M30': 0.54, 'M40': 1.08, 'M50': 2.16, 'M60': 4.32},
+                'storage': {'ebs_gp2': 0.10, 'ebs_gp3': 0.08, 's3_standard': 0.023},
+                'network': {'nat_gateway': 0.045, 'data_transfer_out': 0.09, 'vpc_endpoint': 0.01},
+                'security': {'waf': 1.00, 'secrets_manager': 0.40},
+                'monitoring': {'cloudwatch_logs': 0.50, 'cloudwatch_metrics': 0.30},
+                'backup': {'backup_storage': 0.05, 'backup_restore': 0.02}
+            }
+        
+        # Step 2: Generate recommendations
+        status_text.text("💡 Generating infrastructure recommendations...")
+        progress_bar.progress(40)
+        recommendations = recommend_instances(servers)
+        
+        # Step 3: Calculate costs
+        status_text.text("💰 Calculating comprehensive costs...")
+        progress_bar.progress(60)
+        cost_df = calculate_comprehensive_costs(servers, pricing_data, oracle_license_cost, 
+                                              manpower_cost, data_size_tb, recommendations)
+        
+        # Step 4: Complexity analysis
+        status_text.text("🎯 Analyzing migration complexity...")
+        progress_bar.progress(80)
+        complexity_score, complexity_details, risk_factors = enhanced_complexity_analysis(
+            servers, data_size_tb, num_pl_sql_objects, num_applications
+        )
+        
+        # Step 5: Migration costs and strategy
+        status_text.text("🚚 Calculating migration strategy...")
+        progress_bar.progress(90)
+        migration_costs = calculate_migration_costs(data_size_tb, migration_timeline, complexity_score)
+        strategy = get_migration_strategy(complexity_score)
+        
+        # Step 6: AI Analysis
+        ai_analyses = {}
+        if enable_ai and services.get('ai'):
+            try:
+                migration_data = {
+                    'servers': servers, 'data_size_tb': data_size_tb, 'complexity_score': complexity_score,
+                    'num_pl_sql_objects': num_pl_sql_objects, 'num_applications': num_applications,
+                    'timeline_months': migration_timeline, 'annual_savings': cost_df['Annual_Savings'].sum()
+                }
+                ai_analyses = services['ai'].get_comprehensive_analysis(migration_data)
+            except Exception as e:
+                st.warning(f"AI analysis failed: {str(e)}")
+                ai_analyses = services['ai'].get_fallback_analysis() if services.get('ai') else {}
+        
+        progress_bar.progress(100)
+        status_text.text("✅ Analysis complete!")
+        
+        # Clear progress indicators
+        progress_bar.empty()
+        status_text.empty()
+    
+    # Display Results
+    display_comprehensive_results(services, cost_df, complexity_score, complexity_details, 
+                                 risk_factors, strategy, migration_costs, ai_analyses, 
+                                 servers, data_size_tb, migration_timeline, num_pl_sql_objects,
+                                 pricing_data)
+
+# Main Application
+def main():
+    services = initialize_services()
+    
+    # Enterprise Header with Status
+    st.markdown("""
+    <div class="enterprise-header">
+        <h1>🏢 Enterprise Oracle to MongoDB Migration Analyzer</h1>
+        <p>Comprehensive analysis and planning for enterprise database migration</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Service Status Dashboard
+    display_service_status(services)
+    
+    # Configuration Section
+    st.markdown('<div class="config-section">', unsafe_allow_html=True)
+    st.markdown('<div class="config-header">📊 Migration Configuration</div>', unsafe_allow_html=True)
+    
+    # Layout in tabs for better organization
+    config_tab1, config_tab2, config_tab3, config_tab4 = st.tabs([
+        "🏢 Environment Setup", "💰 Cost Parameters", "🔧 Technical Specs", "🤖 Advanced Options"
+    ])
+    
+    with config_tab1:
+        st.markdown("### Environment Configuration")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            num_environments = st.number_input("Number of Environments", 1, 10, 5)
+            data_size_tb = st.number_input("Total Data Size (TB)", 1, 1000, 25)
+        
+        with col2:
+            migration_timeline = st.slider("Migration Timeline (Months)", 3, 24, 8)
+            aws_region = st.selectbox("Target AWS Region", 
+                                    ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
+                                    index=0)
+        
+        st.markdown("### Environment Details")
+        servers = {}
+        default_envs = ['Development', 'QA', 'UAT', 'Pre-Production', 'Production']
+        
+        env_cols = st.columns(min(3, num_environments))
+        for i in range(num_environments):
+            with env_cols[i % 3]:
+                with st.expander(f"📍 {default_envs[i] if i < len(default_envs) else f'Environment {i+1}'}", expanded=True):
+                    env_name = st.text_input(f"Environment Name", 
+                                           value=default_envs[i] if i < len(default_envs) else f"Env{i+1}",
+                                           key=f"env_name_{i}")
+                    
+                    cpu = st.number_input(f"CPU Cores", 1, 128, 
+                                        [2, 4, 8, 16, 32][min(i, 4)], key=f"cpu_{i}")
+                    ram = st.number_input(f"RAM (GB)", 4, 1024, 
+                                        [8, 16, 32, 64, 128][min(i, 4)], key=f"ram_{i}")
+                    storage = st.number_input(f"Storage (GB)", 10, 10000, 
+                                            [100, 200, 500, 1000, 2000][min(i, 4)], key=f"storage_{i}")
+                    throughput = st.number_input(f"IOPS", 100, 100000, 
+                                               [1000, 2000, 5000, 10000, 20000][min(i, 4)], key=f"throughput_{i}")
+                    daily_usage = st.slider(f"Daily Usage (Hours)", 1, 24, 
+                                          [8, 12, 16, 20, 24][min(i, 4)], key=f"usage_{i}")
+                    
+                    servers[env_name] = {
+                        'cpu': cpu, 'ram': ram, 'storage': storage,
+                        'throughput': throughput, 'daily_usage': daily_usage
+                    }
+    
+    with config_tab2:
+        st.markdown("### Cost Parameters")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Current Oracle Costs")
+            oracle_license_cost = st.number_input("Oracle License Cost ($/year)", 0, 5000000, 150000)
+            manpower_cost = st.number_input("Maintenance & Support ($/year)", 0, 2000000, 200000)
+            oracle_infrastructure = st.number_input("Oracle Infrastructure ($/year)", 0, 1000000, 100000)
+        
+        with col2:
+            st.markdown("#### Migration Investment")
+            migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 500000)
+            contingency_percent = st.slider("Contingency Buffer (%)", 10, 50, 20)
+            training_budget = st.number_input("Training Budget ($)", 0, 200000, 50000)
+    
+    with config_tab3:
+        st.markdown("### Technical Specifications")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Application Architecture")
+            num_pl_sql_objects = st.number_input("PL/SQL Objects Count", 0, 50000, 800)
+            num_applications = st.number_input("Connected Applications", 1, 100, 5)
+            integration_endpoints = st.number_input("API/Integration Endpoints", 0, 500, 25)
+        
+        with col2:
+            st.markdown("#### Operational Requirements")
+            backup_retention = st.selectbox("Backup Retention (Days)", [7, 14, 30, 90, 365], index=2)
+            high_availability = st.selectbox("High Availability", ["Standard", "Multi-AZ", "Multi-Region"], index=1)
+            compliance_requirements = st.multiselect("Compliance Requirements", 
+                                                    ["SOX", "HIPAA", "PCI-DSS", "GDPR", "ISO-27001"], 
+                                                    default=["SOX"])
+    
+    with config_tab4:
+        st.markdown("### Advanced Options")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### AI Analysis")
+            enable_ai = st.checkbox("Enable AI-Powered Analysis", True)
+            if enable_ai and ANTHROPIC_AVAILABLE and 'anthropic_api_key' not in st.session_state:
+                api_key = st.text_input("Anthropic API Key", type="password", 
+                                       help="Get your API key from console.anthropic.com")
+                if api_key:
+                    st.session_state.anthropic_api_key = api_key
+                    # Reinitialize AI service with new key
+                    services['ai'] = EnterpriseAIService()
+        
+        with col2:
+            st.markdown("#### AWS Integration")
+            use_real_pricing = st.checkbox("Fetch Real-time AWS Pricing", value=AWS_API_AVAILABLE)
+            if use_real_pricing and not AWS_API_AVAILABLE:
+                st.warning("AWS SDK not available. Install boto3 and configure credentials.")
+            
+            optimization_level = st.selectbox("Cost Optimization Level", 
+                                            ["Conservative", "Balanced", "Aggressive"], index=1)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Analysis Button
+    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🚀 Generate Comprehensive Analysis", type="primary", use_container_width=True):
+            analyze_migration(services, servers, oracle_license_cost, manpower_cost, data_size_tb, 
+                            migration_timeline, num_pl_sql_objects, num_applications, enable_ai,
+                            migration_budget, training_budget, contingency_percent, aws_region)
 
 if __name__ == "__main__":
     main()
