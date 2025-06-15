@@ -13,6 +13,9 @@ from plotly.subplots import make_subplots
 import plotly.figure_factory as ff
 from io import BytesIO
 import base64
+from datetime import datetime, timedelta
+import json
+from typing import Dict, List, Tuple, Any
 
 # Page Configuration
 st.set_page_config(
@@ -424,36 +427,56 @@ def get_migration_parameters():
     st.session_state.migration_params = params
     return params
 
-def analyze_workload(servers, params):
-    """Simplified workload analysis"""
+def analyze_workload_enhanced(servers, params):
+    """Enhanced workload analysis with comprehensive risk assessment and strategy recommendation"""
     
-    with st.spinner('🔄 Analyzing workload and calculating costs...'):
+    with st.spinner('🔄 Performing comprehensive migration analysis...'):
         progress = st.progress(0)
         
         # Step 1: Instance Recommendations
-        progress.progress(25)
+        progress.progress(15)
         recommendations = get_instance_recommendations(servers)
         
         # Step 2: Cost Analysis
-        progress.progress(50)
-        cost_analysis = calculate_cost_analysis(servers, params, recommendations)
+        progress.progress(30)
+        cost_analysis = calculate_enhanced_cost_analysis(servers, params, recommendations)
         
         # Step 3: Complexity Analysis
-        progress.progress(75)
+        progress.progress(45)
         complexity_analysis = calculate_complexity_analysis(servers, params)
         
-        # Step 4: Migration Strategy
-        progress.progress(100)
-        migration_strategy = get_migration_strategy(complexity_analysis['score'])
+        # Step 4: Detailed Risk Assessment
+        progress.progress(60)
+        detailed_risk_assessment = calculate_detailed_risk_assessment(servers, params, complexity_analysis)
         
-        # Compile results
+        # Step 5: Migration Strategy Analysis
+        progress.progress(75)
+        migration_strategy_analysis = determine_optimal_migration_strategy(
+            servers, params, complexity_analysis, detailed_risk_assessment
+        )
+        
+        # Step 6: Migration Timeline
+        progress.progress(90)
+        migration_timeline = create_detailed_migration_timeline(params, complexity_analysis['score'])
+        
+        # Step 7: Legacy Risk Assessment (for compatibility)
+        progress.progress(95)
+        risk_assessment = calculate_risk_assessment(servers, params, complexity_analysis)
+        
+        progress.progress(100)
+        
+        # Compile enhanced results
         results = {
             'servers': servers,
             'params': params,
             'recommendations': recommendations,
             'cost_analysis': cost_analysis,
             'complexity_analysis': complexity_analysis,
-            'migration_strategy': migration_strategy,
+            'detailed_risk_assessment': detailed_risk_assessment,
+            'migration_strategy_analysis': migration_strategy_analysis,
+            'migration_strategy': migration_strategy_analysis['recommended_strategy'],  # For compatibility
+            'migration_timeline': migration_timeline,
+            'risk_assessment': risk_assessment,  # Legacy format for compatibility
             'timestamp': datetime.now()
         }
         
@@ -461,6 +484,216 @@ def analyze_workload(servers, params):
         progress.empty()
     
     return results
+
+# 5. REPLACE YOUR EXISTING display_enhanced_results FUNCTION WITH THIS UPDATED VERSION
+def display_enhanced_results_updated(results):
+    """Display enhanced results with all dashboards including new risk and strategy analysis"""
+    if not results:
+        st.info("👆 Please complete the analysis first")
+        return
+    
+    st.markdown("## 📊 Enhanced Migration Analysis Results")
+    
+    # Navigation tabs for different dashboards
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "💰 Cost Summary", 
+        "⚠️ Risk Assessment",
+        "🎯 Migration Strategy",
+        "🛡️ Risk Mitigation",
+        "🔥 Heat Maps", 
+        "📅 Timeline", 
+        "💧 Waterfall", 
+        "📄 Export"
+    ])
+    
+    with tab1:
+        create_cost_summary_dashboard(results)
+    
+    with tab2:
+        create_risk_assessment_heatmap(results)
+    
+    with tab3:
+        create_migration_strategy_dashboard(results)
+    
+    with tab4:
+        create_risk_mitigation_dashboard(results)
+    
+    with tab5:
+        create_environment_heatmap(results)
+    
+    with tab6:
+        create_migration_timeline_gantt(results)
+    
+    with tab7:
+        create_waterfall_chart(results)
+    
+    with tab8:
+        st.markdown("## 📄 Export Options")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Enhanced text report
+            text_report = generate_enhanced_text_report(results)
+            st.download_button(
+                label="📄 Download Enhanced Report",
+                data=text_report,
+                file_name=f"Enhanced_Migration_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with col2:
+            # Risk assessment CSV
+            if 'detailed_risk_assessment' in results:
+                risk_data = prepare_risk_csv_export(results['detailed_risk_assessment'])
+                st.download_button(
+                    label="📊 Download Risk Assessment (CSV)",
+                    data=risk_data,
+                    file_name=f"Risk_Assessment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+        
+        with col3:
+            # Strategy analysis CSV
+            if 'migration_strategy_analysis' in results:
+                strategy_data = prepare_strategy_csv_export(results['migration_strategy_analysis'])
+                st.download_button(
+                    label="📋 Download Strategy Analysis (CSV)",
+                    data=strategy_data,
+                    file_name=f"Strategy_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+def generate_enhanced_text_report(results):
+    """Generate enhanced comprehensive text report"""
+    cost_analysis = results['cost_analysis']
+    complexity_analysis = results['complexity_analysis']
+    detailed_risk_assessment = results['detailed_risk_assessment']
+    migration_strategy_analysis = results['migration_strategy_analysis']
+    params = results['params']
+    
+    return f"""
+COMPREHENSIVE ORACLE TO MONGODB MIGRATION ANALYSIS
+=================================================
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+EXECUTIVE SUMMARY
+================
+Current Annual Oracle Cost: ${cost_analysis['total_current_cost']:,.0f}
+Projected Annual AWS Cost: ${cost_analysis['total_aws_cost']:,.0f}
+Annual Savings: ${cost_analysis['total_annual_savings']:,.0f}
+Migration Investment: ${cost_analysis['migration_costs']['total']:,.0f}
+3-Year ROI: {cost_analysis['roi_3_year']:.1f}%
+Payback Period: {cost_analysis['payback_period_months']:.1f} months
+Complexity Score: {complexity_analysis['score']}/100
+Overall Risk Level: {detailed_risk_assessment['risk_level']['level']}
+
+RECOMMENDED MIGRATION STRATEGY
+=============================
+Strategy: {migration_strategy_analysis['recommended_strategy']['name']}
+Approach: {migration_strategy_analysis['recommended_strategy']['description']}
+Timeline: {migration_strategy_analysis['recommended_strategy']['timeline']}
+Risk Level: {migration_strategy_analysis['recommended_strategy']['risk_level']}
+Business Disruption: {migration_strategy_analysis['recommended_strategy']['business_disruption']}
+Suitability Score: {migration_strategy_analysis['recommended_strategy']['suitability_score']:.1f}/100
+
+RISK ASSESSMENT SUMMARY
+=======================
+Overall Risk Score: {detailed_risk_assessment['overall_risk_score']:.1f}/100
+Risk Level: {detailed_risk_assessment['risk_level']['level']}
+Required Action: {detailed_risk_assessment['risk_level']['action']}
+
+Technical Risks:
+- Database Complexity: {detailed_risk_assessment['risk_matrix']['Technical_Risks']['Database_Complexity']['score']:.0f}/100
+- Application Integration: {detailed_risk_assessment['risk_matrix']['Technical_Risks']['Application_Integration']['score']:.0f}/100
+- Performance Risk: {detailed_risk_assessment['risk_matrix']['Technical_Risks']['Performance_Risk']['score']:.0f}/100
+
+Business Risks:
+- Timeline Risk: {detailed_risk_assessment['risk_matrix']['Business_Risks']['Timeline_Risk']['score']:.0f}/100
+- Budget Risk: {detailed_risk_assessment['risk_matrix']['Business_Risks']['Budget_Risk']['score']:.0f}/100
+- Business Continuity: {detailed_risk_assessment['risk_matrix']['Business_Risks']['Business_Continuity']['score']:.0f}/100
+
+STRATEGY ADVANTAGES
+==================
+{chr(10).join([f"• {pro}" for pro in migration_strategy_analysis['recommended_strategy']['pros']])}
+
+CRITICAL SUCCESS FACTORS
+========================
+{chr(10).join([f"• {factor}" for factor in migration_strategy_analysis['success_factors']])}
+
+IMPLEMENTATION ROADMAP
+=====================
+{chr(10).join([f"Phase: {phase['phase']} ({phase['duration']})" + chr(10) + chr(10).join([f"  • {activity}" for activity in phase['activities']]) for phase in migration_strategy_analysis['implementation_roadmap']])}
+
+ENVIRONMENT ANALYSIS
+===================
+{chr(10).join([f"{env}: {specs['cpu']} vCPU, {specs['ram']} GB RAM, {specs['storage']} GB Storage" 
+               for env, specs in results['servers'].items()])}
+
+DETAILED COST BREAKDOWN
+======================
+Migration Team: ${cost_analysis['migration_costs']['migration_team']:,.0f}
+Data Transfer: ${cost_analysis['migration_costs']['data_transfer']:,.0f}
+AWS Services: ${cost_analysis['migration_costs']['aws_services']:,.0f}
+Tools & Software: ${cost_analysis['migration_costs']['tools_software']:,.0f}
+Training: ${cost_analysis['migration_costs']['training_certification']:,.0f}
+Professional Services: ${cost_analysis['migration_costs']['professional_services']:,.0f}
+Testing: ${cost_analysis['migration_costs']['testing_validation']:,.0f}
+Contingency: ${cost_analysis['migration_costs']['contingency']:,.0f}
+
+RECOMMENDATIONS
+==============
+1. Proceed with {migration_strategy_analysis['recommended_strategy']['name']} approach
+2. Address high-risk areas identified in risk assessment
+3. Allocate ${cost_analysis['migration_costs']['total']:,.0f} for migration
+4. Plan for {results['migration_timeline']['total_duration_months']} month timeline
+5. Implement comprehensive risk mitigation strategies
+6. Focus on {complexity_analysis['complexity_level']['level'].lower()} complexity management
+7. Ensure all prerequisites are met before starting migration
+"""
+
+def prepare_risk_csv_export(risk_assessment):
+    """Prepare risk assessment data for CSV export"""
+    risk_data = []
+    
+    for category, risks in risk_assessment['risk_matrix'].items():
+        if category == 'category_score':
+            continue
+        for risk_name, risk_info in risks.items():
+            if risk_name == 'category_score':
+                continue
+            risk_data.append({
+                'Category': category.replace('_', ' '),
+                'Risk_Type': risk_name.replace('_', ' '),
+                'Score': risk_info['score'],
+                'Level': risk_info['level']['level'],
+                'Action_Required': risk_info['level']['action'],
+                'Weight': risk_info['weight']
+            })
+    
+    risk_df = pd.DataFrame(risk_data)
+    return risk_df.to_csv(index=False)
+
+def prepare_strategy_csv_export(strategy_analysis):
+    """Prepare strategy analysis data for CSV export"""
+    strategy_data = []
+    
+    for strategy_name, strategy_info in strategy_analysis['strategy_comparison'].items():
+        strategy_data.append({
+            'Strategy': strategy_info['name'],
+            'Timeline': strategy_info['timeline'],
+            'Risk_Level': strategy_info['risk_level'],
+            'Cost_Efficiency': strategy_info['cost_efficiency'],
+            'Business_Disruption': strategy_info['business_disruption'],
+            'Suitability_Score': strategy_info['suitability_score'],
+            'Best_For': strategy_info['best_for']
+        })
+    
+    strategy_df = pd.DataFrame(strategy_data)
+    return strategy_df.to_csv(index=False)
 
 def get_instance_recommendations(servers):
     """Get AWS instance recommendations"""
@@ -893,9 +1126,827 @@ NEXT STEPS
 5. Validate data integrity and application functionality
 6. Go-live and post-migration optimization
 """
+def calculate_detailed_risk_assessment(servers, params, complexity_analysis):
+    """Calculate comprehensive risk assessment with detailed factors"""
+    
+    # Define risk categories and their factors
+    risk_categories = {
+        'Technical_Risks': {
+            'Database_Complexity': {
+                'weight': 0.25,
+                'factors': ['pl_sql_objects', 'data_size', 'schema_complexity'],
+                'calculation': lambda: min(100, (params['num_pl_sql_objects']/100 + params['data_size_tb']*2 + 30))
+            },
+            'Application_Integration': {
+                'weight': 0.20,
+                'factors': ['num_applications', 'api_complexity', 'data_dependencies'],
+                'calculation': lambda: min(100, params['num_applications']*15 + 20)
+            },
+            'Performance_Risk': {
+                'weight': 0.15,
+                'factors': ['throughput_requirements', 'latency_sensitivity', 'concurrent_users'],
+                'calculation': lambda: min(100, max([specs['throughput'] for specs in servers.values()])/500)
+            },
+            'Data_Migration_Risk': {
+                'weight': 0.20,
+                'factors': ['data_volume', 'downtime_tolerance', 'data_quality'],
+                'calculation': lambda: min(100, params['data_size_tb']*3 + 25)
+            },
+            'Infrastructure_Risk': {
+                'weight': 0.20,
+                'factors': ['environment_count', 'resource_scale', 'network_complexity'],
+                'calculation': lambda: min(100, len(servers)*12 + max([s['cpu']+s['ram']/4 for s in servers.values()]))
+            }
+        },
+        'Business_Risks': {
+            'Timeline_Risk': {
+                'weight': 0.30,
+                'factors': ['timeline_pressure', 'resource_availability', 'stakeholder_alignment'],
+                'calculation': lambda: min(100, max(0, (12-params['migration_timeline'])*12))
+            },
+            'Budget_Risk': {
+                'weight': 0.25,
+                'factors': ['cost_overrun_probability', 'contingency_buffer', 'financial_constraints'],
+                'calculation': lambda: min(100, max(0, 50 - (params['migration_budget']/100000)*2))
+            },
+            'Business_Continuity': {
+                'weight': 0.25,
+                'factors': ['service_availability', 'user_impact', 'revenue_impact'],
+                'calculation': lambda: min(100, len(servers)*8 + params['num_applications']*6)
+            },
+            'Change_Management': {
+                'weight': 0.20,
+                'factors': ['team_readiness', 'training_needs', 'cultural_adaptation'],
+                'calculation': lambda: min(100, 40 + params['num_applications']*3)
+            }
+        },
+        'Security_Risks': {
+            'Data_Security': {
+                'weight': 0.35,
+                'factors': ['sensitive_data', 'compliance_requirements', 'encryption_needs'],
+                'calculation': lambda: min(100, params['data_size_tb']*2 + 45)
+            },
+            'Access_Control': {
+                'weight': 0.25,
+                'factors': ['user_management', 'privilege_escalation', 'authentication'],
+                'calculation': lambda: min(100, params['num_applications']*8 + 30)
+            },
+            'Network_Security': {
+                'weight': 0.25,
+                'factors': ['firewall_config', 'vpc_setup', 'encryption_transit'],
+                'calculation': lambda: min(100, len(servers)*10 + 35)
+            },
+            'Compliance_Risk': {
+                'weight': 0.15,
+                'factors': ['regulatory_requirements', 'audit_trail', 'data_governance'],
+                'calculation': lambda: min(100, 50 + params['data_size_tb'])
+            }
+        },
+        'Operational_Risks': {
+            'Monitoring_Observability': {
+                'weight': 0.30,
+                'factors': ['monitoring_gaps', 'alerting_setup', 'performance_tracking'],
+                'calculation': lambda: min(100, complexity_analysis['score']*0.6)
+            },
+            'Backup_Recovery': {
+                'weight': 0.25,
+                'factors': ['backup_strategy', 'rto_requirements', 'disaster_recovery'],
+                'calculation': lambda: min(100, params['data_size_tb']*1.5 + 30)
+            },
+            'Maintenance_Support': {
+                'weight': 0.25,
+                'factors': ['skill_availability', 'vendor_support', 'documentation'],
+                'calculation': lambda: min(100, 45 + len(servers)*5)
+            },
+            'Scaling_Capacity': {
+                'weight': 0.20,
+                'factors': ['growth_projection', 'elasticity_needs', 'capacity_planning'],
+                'calculation': lambda: min(100, max([s['cpu'] for s in servers.values()])*1.5)
+            }
+        }
+    }
+    
+    # Calculate risk scores
+    risk_matrix = {}
+    environment_risks = {}
+    
+    for category, risks in risk_categories.items():
+        category_scores = {}
+        for risk_name, risk_config in risks.items():
+            risk_score = risk_config['calculation']()
+            category_scores[risk_name] = {
+                'score': risk_score,
+                'weight': risk_config['weight'],
+                'factors': risk_config['factors'],
+                'level': get_risk_level(risk_score)
+            }
+        
+        risk_matrix[category] = category_scores
+        
+        # Calculate weighted category score
+        weighted_score = sum(risk['score'] * risk['weight'] for risk in category_scores.values())
+        risk_matrix[category]['category_score'] = weighted_score
+    
+    # Calculate environment-specific risks
+    for env_name, specs in servers.items():
+        env_risks = calculate_environment_specific_risks(env_name, specs, params)
+        environment_risks[env_name] = env_risks
+    
+    # Calculate overall risk score
+    overall_risk_score = sum([
+        risk_matrix['Technical_Risks']['category_score'] * 0.35,
+        risk_matrix['Business_Risks']['category_score'] * 0.25,
+        risk_matrix['Security_Risks']['category_score'] * 0.25,
+        risk_matrix['Operational_Risks']['category_score'] * 0.15
+    ])
+    
+    return {
+        'risk_matrix': risk_matrix,
+        'environment_risks': environment_risks,
+        'overall_risk_score': overall_risk_score,
+        'risk_level': get_risk_level(overall_risk_score),
+        'mitigation_strategies': generate_mitigation_strategies(risk_matrix),
+        'risk_timeline': generate_risk_timeline(risk_matrix, params)
+    }
+
+def calculate_environment_specific_risks(env_name, specs, params):
+    """Calculate risks specific to each environment"""
+    
+    # Determine environment type
+    env_type = categorize_environment(env_name)
+    
+    base_risks = {
+        'Resource_Adequacy': min(100, (specs['cpu'] * 2 + specs['ram'] * 0.5) * 0.8),
+        'Performance_Risk': min(100, specs['throughput'] / 300),
+        'Storage_Risk': min(100, specs['storage'] / 100),
+        'Availability_Risk': get_availability_risk(env_type),
+        'Complexity_Risk': get_environment_complexity_risk(env_type, specs)
+    }
+    
+    return base_risks
+
+def categorize_environment(env_name):
+    """Categorize environment type"""
+    env_lower = env_name.lower()
+    if any(term in env_lower for term in ['prod', 'production', 'live']):
+        return 'Production'
+    elif any(term in env_lower for term in ['stage', 'staging', 'preprod']):
+        return 'Staging'
+    elif any(term in env_lower for term in ['test', 'testing', 'qa', 'uat']):
+        return 'Testing'
+    elif any(term in env_lower for term in ['dev', 'development', 'sandbox']):
+        return 'Development'
+    else:
+        return 'Other'
+
+def get_availability_risk(env_type):
+    """Get availability risk based on environment type"""
+    risk_mapping = {
+        'Production': 85,
+        'Staging': 60,
+        'Testing': 40,
+        'Development': 25,
+        'Other': 50
+    }
+    return risk_mapping.get(env_type, 50)
+
+def get_environment_complexity_risk(env_type, specs):
+    """Calculate environment complexity risk"""
+    base_complexity = {
+        'Production': 70,
+        'Staging': 50,
+        'Testing': 35,
+        'Development': 25,
+        'Other': 45
+    }
+    
+    # Adjust based on resource scale
+    resource_factor = (specs['cpu'] + specs['ram']/4) / 50
+    complexity = base_complexity.get(env_type, 45) * min(2.0, resource_factor)
+    
+    return min(100, complexity)
+
+def get_risk_level(score):
+    """Get risk level description based on score"""
+    if score < 25:
+        return {'level': 'Low', 'color': '#38a169', 'action': 'Monitor'}
+    elif score < 50:
+        return {'level': 'Medium', 'color': '#d69e2e', 'action': 'Mitigate'}
+    elif score < 75:
+        return {'level': 'High', 'color': '#e53e3e', 'action': 'Urgent Action'}
+    else:
+        return {'level': 'Critical', 'color': '#9f1239', 'action': 'Immediate Response'}
+
+def generate_mitigation_strategies(risk_matrix):
+    """Generate specific mitigation strategies based on risk analysis"""
+    
+    strategies = {}
+    
+    for category, risks in risk_matrix.items():
+        if category == 'category_score':
+            continue
+            
+        category_strategies = []
+        
+        for risk_name, risk_data in risks.items():
+            if risk_name == 'category_score':
+                continue
+                
+            if risk_data['score'] > 50:  # High risk
+                strategy = get_mitigation_strategy(category, risk_name, risk_data['score'])
+                if strategy:
+                    category_strategies.append(strategy)
+        
+        if category_strategies:
+            strategies[category] = category_strategies
+    
+    return strategies
+
+def get_mitigation_strategy(category, risk_name, score):
+    """Get specific mitigation strategy for a risk"""
+    
+    strategies = {
+        'Technical_Risks': {
+            'Database_Complexity': {
+                'strategy': 'Implement automated PL/SQL conversion tools and conduct thorough code analysis',
+                'timeline': '2-4 weeks',
+                'resources': ['Database Architect', 'Migration Specialist'],
+                'cost_impact': 'Medium'
+            },
+            'Application_Integration': {
+                'strategy': 'Develop comprehensive API testing framework and integration validation',
+                'timeline': '3-6 weeks',
+                'resources': ['Integration Specialist', 'QA Engineer'],
+                'cost_impact': 'Medium'
+            },
+            'Performance_Risk': {
+                'strategy': 'Conduct performance benchmarking and implement optimization strategies',
+                'timeline': '2-3 weeks',
+                'resources': ['Performance Engineer', 'Database Tuning Specialist'],
+                'cost_impact': 'Low'
+            }
+        },
+        'Business_Risks': {
+            'Timeline_Risk': {
+                'strategy': 'Implement parallel development streams and increase resource allocation',
+                'timeline': 'Immediate',
+                'resources': ['Project Manager', 'Additional Team Members'],
+                'cost_impact': 'High'
+            },
+            'Budget_Risk': {
+                'strategy': 'Implement strict budget monitoring and scope management',
+                'timeline': 'Ongoing',
+                'resources': ['Financial Controller', 'Project Manager'],
+                'cost_impact': 'Low'
+            }
+        },
+        'Security_Risks': {
+            'Data_Security': {
+                'strategy': 'Implement end-to-end encryption and data classification framework',
+                'timeline': '2-4 weeks',
+                'resources': ['Security Architect', 'Data Protection Officer'],
+                'cost_impact': 'Medium'
+            }
+        },
+        'Operational_Risks': {
+            'Monitoring_Observability': {
+                'strategy': 'Deploy comprehensive monitoring and alerting infrastructure',
+                'timeline': '1-2 weeks',
+                'resources': ['DevOps Engineer', 'Monitoring Specialist'],
+                'cost_impact': 'Low'
+            }
+        }
+    }
+    
+    return strategies.get(category, {}).get(risk_name)
+
+def generate_risk_timeline(risk_matrix, params):
+    """Generate risk timeline showing when risks peak during migration"""
+    
+    migration_months = params['migration_timeline']
+    timeline_risks = []
+    
+    # Map risks to migration phases
+    phase_risk_mapping = {
+        1: ['Timeline_Risk', 'Budget_Risk'],  # Planning phase
+        2: ['Infrastructure_Risk', 'Security_Risk'],  # Setup phase
+        3: ['Data_Migration_Risk', 'Performance_Risk'],  # Migration phase
+        4: ['Application_Integration', 'Testing_Risk'],  # Testing phase
+        5: ['Business_Continuity', 'Change_Management']  # Go-live phase
+    }
+    
+    months_per_phase = migration_months / 5
+    
+    for phase, risk_types in phase_risk_mapping.items():
+        phase_start = (phase - 1) * months_per_phase
+        phase_end = phase * months_per_phase
+        
+        timeline_risks.append({
+            'phase': phase,
+            'start_month': phase_start,
+            'end_month': phase_end,
+            'peak_risks': risk_types,
+            'mitigation_window': f"Months {phase_start:.1f}-{phase_end:.1f}"
+        })
+    
+    return timeline_risks
+
+def determine_optimal_migration_strategy(servers, params, complexity_analysis, risk_assessment):
+    """Determine optimal migration strategy based on comprehensive analysis"""
+    
+    # Calculate strategy factors
+    factors = {
+        'complexity_score': complexity_analysis['score'],
+        'risk_score': risk_assessment['overall_risk_score'],
+        'data_volume': params['data_size_tb'],
+        'timeline_pressure': max(0, 12 - params['migration_timeline']),
+        'budget_constraints': params['migration_budget'] / 1000000,  # Convert to millions
+        'environment_count': len(servers),
+        'application_complexity': params['num_applications'] * params['num_pl_sql_objects'] / 1000
+    }
+    
+    # Strategy scoring matrix
+    strategies = {
+        'Big_Bang_Migration': {
+            'name': 'Big Bang Migration',
+            'description': 'Complete migration in a single cutover window',
+            'best_for': 'Small to medium databases with minimal complexity',
+            'timeline': '3-6 months',
+            'risk_level': 'High',
+            'cost_efficiency': 'High',
+            'business_disruption': 'High',
+            'suitability_score': calculate_big_bang_score(factors),
+            'pros': [
+                'Fastest implementation',
+                'Lower overall cost',
+                'Simpler project management',
+                'Quick ROI realization'
+            ],
+            'cons': [
+                'Higher risk of extended downtime',
+                'Limited rollback options',
+                'Requires extensive testing',
+                'High pressure on execution'
+            ],
+            'prerequisites': [
+                'Comprehensive testing environment',
+                'Detailed rollback plan',
+                'Extended maintenance window availability',
+                'Experienced migration team'
+            ]
+        },
+        'Phased_Migration': {
+            'name': 'Phased Migration',
+            'description': 'Migrate applications/modules in planned phases',
+            'best_for': 'Medium to large environments with multiple applications',
+            'timeline': '6-12 months',
+            'risk_level': 'Medium',
+            'cost_efficiency': 'Medium',
+            'business_disruption': 'Medium',
+            'suitability_score': calculate_phased_score(factors),
+            'pros': [
+                'Reduced risk per phase',
+                'Learning from early phases',
+                'Gradual user adaptation',
+                'Better change management'
+            ],
+            'cons': [
+                'Longer overall timeline',
+                'Complex data synchronization',
+                'Higher coordination overhead',
+                'Potential integration challenges'
+            ],
+            'prerequisites': [
+                'Application dependency mapping',
+                'Data synchronization strategy',
+                'Phase-specific testing',
+                'Cross-phase coordination plan'
+            ]
+        },
+        'Parallel_Run': {
+            'name': 'Parallel Run Migration',
+            'description': 'Run both systems in parallel before final cutover',
+            'best_for': 'Mission-critical systems requiring zero downtime',
+            'timeline': '8-15 months',
+            'risk_level': 'Low',
+            'cost_efficiency': 'Low',
+            'business_disruption': 'Low',
+            'suitability_score': calculate_parallel_score(factors),
+            'pros': [
+                'Minimal business risk',
+                'Extensive validation period',
+                'Gradual transition capability',
+                'Strong rollback options'
+            ],
+            'cons': [
+                'Highest cost approach',
+                'Complex data synchronization',
+                'Extended timeline',
+                'Resource intensive'
+            ],
+            'prerequisites': [
+                'Real-time data synchronization',
+                'Dual infrastructure capacity',
+                'Comprehensive monitoring',
+                'Extended budget allocation'
+            ]
+        },
+        'Hybrid_Approach': {
+            'name': 'Hybrid Approach',
+            'description': 'Combination of strategies based on application criticality',
+            'best_for': 'Complex environments with varying application criticalities',
+            'timeline': '9-18 months',
+            'risk_level': 'Medium-Low',
+            'cost_efficiency': 'Medium',
+            'business_disruption': 'Low-Medium',
+            'suitability_score': calculate_hybrid_score(factors),
+            'pros': [
+                'Optimized risk management',
+                'Tailored approach per application',
+                'Balanced cost and risk',
+                'Flexible execution'
+            ],
+            'cons': [
+                'Complex project management',
+                'Multiple migration patterns',
+                'Coordination challenges',
+                'Varied skill requirements'
+            ],
+            'prerequisites': [
+                'Application criticality assessment',
+                'Multi-strategy planning',
+                'Diverse skill sets',
+                'Flexible resource allocation'
+            ]
+        }
+    }
+    
+    # Select optimal strategy
+    best_strategy = max(strategies.items(), key=lambda x: x[1]['suitability_score'])
+    
+    return {
+        'recommended_strategy': best_strategy[1],
+        'strategy_comparison': strategies,
+        'decision_factors': factors,
+        'implementation_roadmap': generate_implementation_roadmap(best_strategy[1], factors),
+        'success_factors': get_success_factors(best_strategy[1])
+    }
+
+def calculate_big_bang_score(factors):
+    """Calculate suitability score for Big Bang migration"""
+    score = 100
+    
+    # Penalize based on complexity and risk
+    score -= factors['complexity_score'] * 0.8
+    score -= factors['risk_score'] * 0.6
+    score -= factors['data_volume'] * 2
+    score -= factors['environment_count'] * 5
+    score -= factors['application_complexity'] * 3
+    
+    # Bonus for simple scenarios
+    if factors['data_volume'] < 10 and factors['environment_count'] <= 2:
+        score += 20
+    
+    return max(0, score)
+
+def calculate_phased_score(factors):
+    """Calculate suitability score for Phased migration"""
+    score = 80
+    
+    # Optimal for medium complexity
+    if 30 <= factors['complexity_score'] <= 70:
+        score += 15
+    
+    # Good for multiple environments
+    if factors['environment_count'] > 2:
+        score += 10
+    
+    # Penalize for very high complexity
+    if factors['complexity_score'] > 80:
+        score -= 20
+    
+    return max(0, score)
+
+def calculate_parallel_score(factors):
+    """Calculate suitability score for Parallel migration"""
+    score = 60
+    
+    # Best for high-risk, high-complexity scenarios
+    if factors['risk_score'] > 60:
+        score += 25
+    
+    if factors['complexity_score'] > 70:
+        score += 20
+    
+    # Requires adequate budget
+    if factors['budget_constraints'] < 0.5:  # Less than 500K
+        score -= 30
+    
+    return max(0, score)
+
+def calculate_hybrid_score(factors):
+    """Calculate suitability score for Hybrid migration"""
+    score = 70
+    
+    # Good for complex, multi-environment scenarios
+    if factors['environment_count'] > 3:
+        score += 15
+    
+    if factors['application_complexity'] > 5:
+        score += 10
+    
+    # Balanced approach bonus
+    if 40 <= factors['complexity_score'] <= 80:
+        score += 10
+    
+    return max(0, score)
+
+def generate_implementation_roadmap(strategy, factors):
+    """Generate detailed implementation roadmap for selected strategy"""
+    
+    roadmap_templates = {
+        'Big Bang Migration': [
+            {
+                'phase': 'Preparation',
+                'duration': '4-6 weeks',
+                'activities': [
+                    'Complete environment analysis',
+                    'Develop migration scripts',
+                    'Setup target infrastructure',
+                    'Create rollback procedures'
+                ]
+            },
+            {
+                'phase': 'Testing',
+                'duration': '2-3 weeks',
+                'activities': [
+                    'Execute test migrations',
+                    'Performance validation',
+                    'User acceptance testing',
+                    'Rollback testing'
+                ]
+            },
+            {
+                'phase': 'Go-Live',
+                'duration': '1-2 weeks',
+                'activities': [
+                    'Final data migration',
+                    'Application cutover',
+                    'Smoke testing',
+                    'Post-migration monitoring'
+                ]
+            }
+        ],
+        'Phased Migration': [
+            {
+                'phase': 'Phase Planning',
+                'duration': '3-4 weeks',
+                'activities': [
+                    'Application dependency mapping',
+                    'Phase sequence design',
+                    'Data synchronization planning',
+                    'Risk assessment per phase'
+                ]
+            },
+            {
+                'phase': 'Phase Execution',
+                'duration': '16-20 weeks',
+                'activities': [
+                    'Execute migration phases',
+                    'Inter-phase validation',
+                    'Progressive rollout',
+                    'Continuous monitoring'
+                ]
+            },
+            {
+                'phase': 'Consolidation',
+                'duration': '2-3 weeks',
+                'activities': [
+                    'Final phase completion',
+                    'System integration testing',
+                    'Performance optimization',
+                    'Documentation update'
+                ]
+            }
+        ]
+        # Add other strategy roadmaps as needed
+    }
+    
+    return roadmap_templates.get(strategy['name'], [])
+
+def get_success_factors(strategy):
+    """Get critical success factors for the strategy"""
+    
+    success_factors = {
+        'Big Bang Migration': [
+            'Comprehensive testing in production-like environment',
+            'Detailed rollback plan and procedures',
+            'Experienced migration team availability',
+            'Adequate maintenance window',
+            'Strong project governance',
+            'Clear communication plan'
+        ],
+        'Phased Migration': [
+            'Accurate application dependency mapping',
+            'Robust data synchronization mechanism',
+            'Strong phase coordination',
+            'Continuous monitoring and feedback',
+            'Flexible resource allocation',
+            'Change management excellence'
+        ],
+        'Parallel Run Migration': [
+            'Real-time data synchronization',
+            'Comprehensive monitoring setup',
+            'Adequate infrastructure capacity',
+            'Extended budget commitment',
+            'Strong validation processes',
+            'Risk management excellence'
+        ],
+        'Hybrid Approach': [
+            'Application criticality assessment',
+            'Multi-strategy expertise',
+            'Complex project coordination',
+            'Flexible execution capability',
+            'Diverse skill set availability',
+            'Adaptive planning approach'
+        ]
+    }
+    
+    return success_factors.get(strategy['name'], [])
+
+def create_risk_assessment_heatmap(results):
+    """Create comprehensive risk assessment heatmap"""
+    st.markdown("## ⚠️ Risk Assessment Heat Map")
+    
+    risk_assessment = results['detailed_risk_assessment']
+    risk_matrix = risk_assessment['risk_matrix']
+    environment_risks = risk_assessment['environment_risks']
+    
+    # Create risk category heatmap
+    st.markdown("### 🎯 Risk Categories Analysis")
+    
+    categories = list(risk_matrix.keys())
+    risk_types = []
+    risk_scores = []
+    
+    for category in categories:
+        for risk_name, risk_data in risk_matrix[category].items():
+            if risk_name != 'category_score':
+                risk_types.append(f"{category.replace('_', ' ')}")
+                risk_scores.append([risk_data['score']])
+    
+    # Create main risk heatmap
+    fig_risk = go.Figure(data=go.Heatmap(
+        z=risk_scores,
+        x=['Risk Score'],
+        y=risk_types,
+        colorscale=[
+            [0, '#38a169'],      # Green for low risk
+            [0.25, '#d69e2e'],   # Yellow for medium risk
+            [0.5, '#e53e3e'],    # Red for high risk
+            [1, '#9f1239']       # Dark red for critical risk
+        ],
+        text=[[f'{score[0]:.0f}' for score in risk_scores]],
+        texttemplate="%{text}",
+        textfont={"size": 12, "color": "white"},
+        hoverongaps=False,
+        colorbar=dict(
+            title="Risk Level",
+            tickvals=[0, 25, 50, 75, 100],
+            ticktext=["Low", "Medium", "High", "Critical", "Extreme"]
+        )
+    ))
+    
+    fig_risk.update_layout(
+        title='Migration Risk Assessment by Category',
+        height=600,
+        yaxis=dict(autorange="reversed")
+    )
+    
+    st.plotly_chart(fig_risk, use_container_width=True)
+    
+    # Environment-specific risk heatmap
+    st.markdown("### 🏢 Environment-Specific Risk Analysis")
+    
+    if environment_risks:
+        env_names = list(environment_risks.keys())
+        risk_categories = list(next(iter(environment_risks.values())).keys())
+        
+        env_risk_matrix = []
+        for env in env_names:
+            env_scores = [environment_risks[env][category] for category in risk_categories]
+            env_risk_matrix.append(env_scores)
+        
+        fig_env_risk = go.Figure(data=go.Heatmap(
+            z=env_risk_matrix,
+            x=[cat.replace('_', ' ') for cat in risk_categories],
+            y=env_names,
+            colorscale='Reds',
+            text=[[f'{val:.0f}' for val in row] for row in env_risk_matrix],
+            texttemplate="%{text}",
+            textfont={"size": 10},
+            hoverongaps=False
+        ))
+        
+        fig_env_risk.update_layout(
+            title='Environment-Specific Risk Distribution',
+            height=400,
+            xaxis_tickangle=-45
+        )
+        
+        st.plotly_chart(fig_env_risk, use_container_width=True)
+
+def create_migration_strategy_dashboard(results):
+    """Create comprehensive migration strategy dashboard"""
+    st.markdown("## 🎯 Optimal Migration Strategy Dashboard")
+    
+    strategy_analysis = results['migration_strategy_analysis']
+    recommended = strategy_analysis['recommended_strategy']
+    comparison = strategy_analysis['strategy_comparison']
+    
+    # Strategy recommendation card
+    st.markdown(f"""
+    <div class="strategy-card strategy-{recommended['risk_level'].lower().replace('-', '_')}-risk">
+        <h2>🏆 Recommended Strategy: {recommended['name']}</h2>
+        <p><strong>Description:</strong> {recommended['description']}</p>
+        <div style="display: flex; justify-content: space-between; margin: 1rem 0;">
+            <div><strong>Timeline:</strong> {recommended['timeline']}</div>
+            <div><strong>Risk Level:</strong> {recommended['risk_level']}</div>
+            <div><strong>Cost Efficiency:</strong> {recommended['cost_efficiency']}</div>
+        </div>
+        <p><strong>Best For:</strong> {recommended['best_for']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Strategy comparison matrix
+    st.markdown("### 📊 Strategy Comparison Matrix")
+    
+    comparison_data = []
+    for strategy_name, strategy_data in comparison.items():
+        comparison_data.append({
+            'Strategy': strategy_data['name'],
+            'Timeline': strategy_data['timeline'],
+            'Risk Level': strategy_data['risk_level'],
+            'Cost Efficiency': strategy_data['cost_efficiency'],
+            'Business Disruption': strategy_data['business_disruption'],
+            'Suitability Score': f"{strategy_data['suitability_score']:.1f}"
+        })
+    
+    comparison_df = pd.DataFrame(comparison_data)
+    st.dataframe(comparison_df, use_container_width=True)
+    
+    # Pros and cons analysis
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### ✅ Advantages")
+        for pro in recommended['pros']:
+            st.markdown(f"• {pro}")
+    
+    with col2:
+        st.markdown("### ⚠️ Considerations")
+        for con in recommended['cons']:
+            st.markdown(f"• {con}")
+
+def create_risk_mitigation_dashboard(results):
+    """Create risk mitigation strategies dashboard"""
+    st.markdown("## 🛡️ Risk Mitigation Strategies")
+    
+    risk_assessment = results['detailed_risk_assessment']
+    mitigation_strategies = risk_assessment['mitigation_strategies']
+    
+    # Overall risk level indicator
+    overall_risk = risk_assessment['risk_level']
+    st.markdown(f"""
+    <div class="metric-card" style="border-left-color: {overall_risk['color']};">
+        <div class="metric-value" style="color: {overall_risk['color']};">{overall_risk['level']}</div>
+        <div class="metric-label">Overall Risk Level</div>
+        <div class="metric-change">Action Required: {overall_risk['action']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Mitigation strategies by category
+    for category, strategies in mitigation_strategies.items():
+        if strategies:  # Only show categories with strategies
+            st.markdown(f"### 🎯 {category.replace('_', ' ')} Mitigation")
+            
+            for i, strategy in enumerate(strategies):
+                if strategy:  # Check if strategy exists
+                    with st.expander(f"Strategy {i+1}: {strategy.get('strategy', 'Risk Mitigation')}", expanded=False):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown(f"**Timeline:** {strategy.get('timeline', 'TBD')}")
+                            st.markdown(f"**Cost Impact:** {strategy.get('cost_impact', 'Medium')}")
+                        
+                        with col2:
+                            st.markdown("**Required Resources:**")
+                            resources = strategy.get('resources', ['TBD'])
+                            for resource in resources:
+                                st.markdown(f"• {resource}")
 
 def main():
-    """Main application function"""
+    """Enhanced main application function with comprehensive risk assessment"""
     
     # Initialize session state
     initialize_session_state()
@@ -904,7 +1955,7 @@ def main():
     st.markdown("""
     <div class="enterprise-header">
         <h1>🏢 Enterprise Oracle to MongoDB Migration Analyzer</h1>
-        <p>Comprehensive analysis and planning for enterprise database migration</p>
+        <p>Advanced analytics with comprehensive risk assessment and strategic planning</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -913,18 +1964,40 @@ def main():
         st.markdown("## 🧭 Navigation")
         page = st.radio(
             "Select Section:",
-            ["🔧 Configuration", "🚀 Analysis", "📊 Results"],
+            ["🔧 Configuration", "🚀 Analysis", "📊 Enhanced Results"],
             key="main_navigation"
         )
         
-        # Quick status
+        # Enhanced status indicators
+        st.markdown("### 📋 Analysis Status")
         if st.session_state.servers_config:
             st.success(f"✅ {len(st.session_state.servers_config)} environments configured")
         else:
-            st.warning("⚠️ No environments configured")
+            st.warning("⚠️ Configure environments")
+        
+        if st.session_state.migration_params:
+            st.success("✅ Migration parameters set")
+        else:
+            st.warning("⚠️ Set migration parameters")
         
         if st.session_state.analysis_results:
-            st.success("✅ Analysis complete")
+            st.success("✅ Comprehensive analysis complete")
+            # Enhanced quick metrics
+            results = st.session_state.analysis_results
+            
+            # Cost metrics
+            st.metric("Annual Savings", f"${results['cost_analysis']['total_annual_savings']:,.0f}")
+            st.metric("ROI", f"{results['cost_analysis']['roi_3_year']:.1f}%")
+            
+            # Risk metrics
+            if 'detailed_risk_assessment' in results:
+                risk_level = results['detailed_risk_assessment']['risk_level']
+                st.metric("Risk Level", risk_level['level'], delta=risk_level['action'])
+            
+            # Strategy recommendation
+            if 'migration_strategy_analysis' in results:
+                strategy = results['migration_strategy_analysis']['recommended_strategy']
+                st.info(f"💡 Recommended: {strategy['name']}")
         else:
             st.info("ℹ️ Analysis pending")
     
@@ -966,10 +2039,10 @@ def main():
         
         # Show configuration status
         if st.session_state.servers_config and st.session_state.migration_params:
-            st.success("✅ Configuration complete! Go to Analysis section to run workload analysis.")
+            st.success("✅ Configuration complete! Go to Analysis section to run comprehensive workload analysis.")
     
     elif page == "🚀 Analysis":
-        st.markdown("## 🚀 Workload Analysis")
+        st.markdown("## 🚀 Comprehensive Migration Analysis")
         
         # Check if configuration is complete
         if not st.session_state.servers_config:
@@ -1009,29 +2082,32 @@ def main():
             st.markdown(f"• Maintenance: ${params['manpower_cost']:,}/year")
             st.markdown(f"• Migration Budget: ${params['migration_budget']:,}")
         
-        # Analysis button
+        # Enhanced analysis description
         st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-        st.markdown("### 🔬 Run Analysis")
+        st.markdown("### 🔬 Run Comprehensive Migration Analysis")
         
         analysis_col1, analysis_col2 = st.columns([2, 1])
         
         with analysis_col1:
             st.markdown("""
-            **This analysis will provide:**
-            - 💰 Detailed cost comparison between Oracle and AWS
-            - 🏗️ Infrastructure recommendations for each environment
-            - 📊 Migration complexity assessment
-            - 🎯 Strategic migration approach recommendations
-            - 📈 ROI projections and savings analysis
+            **This comprehensive analysis includes:**
+            - 💰 **Cost Analysis:** Detailed cost breakdowns and ROI calculations
+            - ⚠️ **Risk Assessment:** Multi-dimensional risk analysis with heat maps
+            - 🎯 **Strategy Recommendation:** AI-powered optimal migration strategy selection
+            - 🛡️ **Risk Mitigation:** Actionable mitigation strategies for identified risks
+            - 🔥 **Environment Analysis:** Resource and complexity heat maps
+            - 📅 **Timeline Planning:** Detailed Gantt charts and critical path analysis
+            - 💧 **Cost Transformation:** Waterfall analysis of cost changes
+            - 📄 **Professional Reports:** Comprehensive PDF and CSV exports
             """)
         
         with analysis_col2:
-            if st.button("🚀 Analyze Workload", type="primary", use_container_width=True):
-                results = analyze_workload(
+            if st.button("🚀 Run Comprehensive Analysis", type="primary", use_container_width=True):
+                results = analyze_workload_enhanced(  # <-- CHANGED FROM analyze_workload
                     st.session_state.servers_config,
                     st.session_state.migration_params
                 )
-                st.success("✅ Analysis complete! Check the Results section.")
+                st.success("✅ Comprehensive analysis complete! Check the Enhanced Results section.")
                 st.balloons()
         
         # Show previous results if available
@@ -1039,7 +2115,8 @@ def main():
             st.markdown("### ✅ Previous Analysis Results")
             results = st.session_state.analysis_results
             
-            summary_col1, summary_col2, summary_col3 = st.columns(3)
+            # Enhanced summary metrics
+            summary_col1, summary_col2, summary_col3, summary_col4, summary_col5 = st.columns(5)
             
             with summary_col1:
                 st.metric("Annual Savings", 
@@ -1050,14 +2127,29 @@ def main():
                          f"${results['cost_analysis']['migration_costs']['total']:,.0f}")
             
             with summary_col3:
-                st.metric("Complexity", 
-                         f"{results['complexity_analysis']['score']}/100")
+                st.metric("3-Year ROI", 
+                         f"{results['cost_analysis']['roi_3_year']:.1f}%")
             
-            st.info("📊 Go to Results section for detailed analysis")
+            with summary_col4:
+                if 'detailed_risk_assessment' in results:
+                    risk_level = results['detailed_risk_assessment']['risk_level']
+                    st.metric("Risk Level", risk_level['level'])
+                else:
+                    st.metric("Complexity", f"{results['complexity_analysis']['score']}/100")
+            
+            with summary_col5:
+                if 'migration_strategy_analysis' in results:
+                    strategy = results['migration_strategy_analysis']['recommended_strategy']
+                    st.metric("Strategy", strategy['name'][:15] + "...")
+                else:
+                    st.metric("Timeline", f"{results['migration_timeline']['total_duration_months']} months")
+            
+            st.info("📊 Go to Enhanced Results section for detailed dashboards and comprehensive analysis")
     
-    elif page == "📊 Results":
-        st.markdown("## 📊 Analysis Results")
-        display_results(st.session_state.analysis_results)
+    elif page == "📊 Enhanced Results":
+        st.markdown("## 📊 Comprehensive Migration Analysis Results")
+        display_enhanced_results_updated(st.session_state.analysis_results)  # <-- CHANGED FROM display_enhanced_results
 
+# 7. AT THE VERY END OF YOUR FILE, ENSURE THE MAIN FUNCTION CALL IS:
 if __name__ == "__main__":
     main()
