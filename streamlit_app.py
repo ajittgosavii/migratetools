@@ -683,6 +683,72 @@ def create_waterfall_chart(results):
     )
     
     st.plotly_chart(fig_waterfall, use_container_width=True)
+def create_cost_summary_dashboard(results):
+    """Create cost summary dashboard"""
+    st.markdown("## 💰 Cost Summary Dashboard")
+    
+    cost_analysis = results['cost_analysis']
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Current Annual Cost", f"${cost_analysis['total_current_cost']:,.0f}")
+    
+    with col2:
+        st.metric("Projected AWS Cost", f"${cost_analysis['total_aws_cost']:,.0f}")
+    
+    with col3:
+        st.metric("Annual Savings", f"${cost_analysis['total_annual_savings']:,.0f}")
+    
+    # Migration cost breakdown
+    st.markdown("### 📊 Migration Cost Breakdown")
+    migration_costs = cost_analysis['migration_costs']
+    migration_df = pd.DataFrame({
+        'Cost Component': [
+            'Migration Team', 
+            'Data Transfer', 
+            'Tools & Training', 
+            'AWS Services', 
+            'Contingency',
+            'Total Migration Cost'
+        ],
+        'Amount ($)': [
+            migration_costs['migration_team'],
+            migration_costs['data_transfer'],
+            migration_costs['tools_training'],
+            migration_costs['aws_services'],
+            migration_costs['contingency'],
+            migration_costs['total']
+        ]
+    })
+    st.dataframe(migration_df, use_container_width=True)
+    
+    # ROI and payback period
+    roi = cost_analysis['roi_3_year']
+    payback_months = (cost_analysis['migration_costs']['total'] / 
+                     (cost_analysis['total_annual_savings'] / 12))
+    
+    col4, col5 = st.columns(2)
+    with col4:
+        st.metric("3-Year ROI", f"{roi:.1f}%")
+    with col5:
+        st.metric("Payback Period", f"{payback_months:.1f} months")
+    
+    # Cost savings over time
+    years = list(range(1, 6))
+    savings = [cost_analysis['total_annual_savings'] * year for year in years]
+    migration_cost = [cost_analysis['migration_costs']['total']] * 5
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name='Cumulative Savings', x=years, y=savings))
+    fig.add_trace(go.Bar(name='Migration Cost', x=years, y=migration_cost))
+    fig.update_layout(
+        title='Cost Savings Over Time',
+        xaxis_title='Years',
+        yaxis_title='Amount ($)',
+        barmode='overlay'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
     
     # ROI projection over time
     st.markdown("### 📈 ROI Projection Over Time")
