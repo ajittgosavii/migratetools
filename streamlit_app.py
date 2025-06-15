@@ -1337,20 +1337,25 @@ def calculate_enhanced_cost_analysis(servers, params, recommendations):
     # Migration costs
     data_size_tb = params['data_size_tb']
     timeline_months = params['migration_timeline']
-    
+
     migration_team_cost = 25000 * timeline_months
     data_transfer_cost = data_size_tb * 1000 * 0.02 if params['use_direct_connect'] else data_size_tb * 100
     tools_and_training = 50000
     aws_services = 20000
     contingency = (migration_team_cost + data_transfer_cost + tools_and_training + aws_services) * 0.15
-    
+
     total_migration_cost = migration_team_cost + data_transfer_cost + tools_and_training + aws_services + contingency
-    
+
+    # Calculate ROI
+    total_annual_savings = total_current_cost - total_aws_cost
+    roi_3_year = ((total_annual_savings * 3 - total_migration_cost) / total_migration_cost * 100) if total_migration_cost > 0 else 0
+
     return {
         'cost_breakdown': pd.DataFrame(cost_data),
         'total_current_cost': total_current_cost,
         'total_aws_cost': total_aws_cost,
-        'total_annual_savings': total_current_cost - total_aws_cost,
+        'total_annual_savings': total_annual_savings,
+        'roi_3_year': roi_3_year,  # Add ROI to results
         'migration_costs': {
             'migration_team': migration_team_cost,
             'data_transfer': data_transfer_cost,
