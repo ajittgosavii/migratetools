@@ -2211,186 +2211,186 @@ def create_enhanced_visualizations(results, services):
 # with these complete implementations:
 
 # COMPLETE RESULTS DASHBOARD TAB (main_tab3)
-with main_tab3:
-    st.markdown("## 📊 Enhanced Migration Analysis Results")
-    
-    if st.session_state.analysis_results:
-        results = st.session_state.analysis_results
+    with main_tab3:
+        st.markdown("## 📊 Enhanced Migration Analysis Results")
         
-        # Enhanced Results Dashboard
-        cost_df = results['cost_df']
-        complexity_score = results['complexity_score']
-        complexity_details = results['complexity_details']
-        enhanced_migration_costs = results['enhanced_migration_costs']
-        strategy = results['strategy']
-        risk_factors = results['risk_factors']
-        ai_analyses = results['ai_analyses']
-        servers = results['servers']
-        data_size_tb = results['data_size_tb']
-        migration_timeline = results['migration_timeline']
-        
-        # Executive Summary Metrics
-        total_current_cost = cost_df['Current_Total'].sum()
-        total_aws_cost = cost_df['AWS_Total_Cost'].sum()
-        total_annual_savings = cost_df['Annual_Savings'].sum()
-        three_year_savings = total_annual_savings * 3
-        roi_percentage = (three_year_savings - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100 if enhanced_migration_costs['total_migration_cost'] > 0 else 0
-        
-        # Executive Dashboard
-        st.markdown("### 📊 Executive Dashboard")
-        
-        # Main metrics grid
-        metric_col1, metric_col2, metric_col3, metric_col4, metric_col5 = st.columns(5)
-        
-        with metric_col1:
-            st.markdown(f"""
-            <div class="metric-card">
-                <p class="metric-value">${enhanced_migration_costs['total_migration_cost']:,.0f}</p>
-                <p class="metric-label">Total Migration Cost</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with metric_col2:
-            st.markdown(f"""
-            <div class="metric-card">
-                <p class="metric-value">${enhanced_migration_costs['recommended_transfer_cost']:,.0f}</p>
-                <p class="metric-label">Data Transfer Cost</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with metric_col3:
-            st.markdown(f"""
-            <div class="metric-card">
-                <p class="metric-value">{enhanced_migration_costs['estimated_transfer_days']:.1f} days</p>
-                <p class="metric-label">Transfer Time</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with metric_col4:
-            st.markdown(f"""
-            <div class="metric-card">
-                <p class="metric-value">${total_annual_savings:,.0f}</p>
-                <p class="metric-label">Annual Savings</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with metric_col5:
-            st.markdown(f"""
-            <div class="metric-card">
-                <p class="metric-value">{roi_percentage:.1f}%</p>
-                <p class="metric-label">3-Year ROI</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-        
-        # Detailed Analysis Sections
-        analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs([
-            "📊 Cost Analysis", "📈 Visual Analytics", "🎯 Migration Strategy", "🤖 AI Insights"
-        ])
-        
-        with analysis_tab1:
-            # Cost breakdown
-            st.markdown("#### 💰 Comprehensive Cost Analysis")
+        if st.session_state.analysis_results:
+            results = st.session_state.analysis_results
             
-            cost_col1, cost_col2 = st.columns(2)
+            # Enhanced Results Dashboard
+            cost_df = results['cost_df']
+            complexity_score = results['complexity_score']
+            complexity_details = results['complexity_details']
+            enhanced_migration_costs = results['enhanced_migration_costs']
+            strategy = results['strategy']
+            risk_factors = results['risk_factors']
+            ai_analyses = results['ai_analyses']
+            servers = results['servers']
+            data_size_tb = results['data_size_tb']
+            migration_timeline = results['migration_timeline']
             
-            with cost_col1:
-                st.markdown("##### Current vs. Projected Costs")
-                st.dataframe(cost_df[['Environment', 'Current_Total', 'AWS_Total_Cost', 'Annual_Savings', 'Savings_Percentage']], 
-                           use_container_width=True)
+            # Executive Summary Metrics
+            total_current_cost = cost_df['Current_Total'].sum()
+            total_aws_cost = cost_df['AWS_Total_Cost'].sum()
+            total_annual_savings = cost_df['Annual_Savings'].sum()
+            three_year_savings = total_annual_savings * 3
+            roi_percentage = (three_year_savings - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100 if enhanced_migration_costs['total_migration_cost'] > 0 else 0
             
-            with cost_col2:
-                # Cost breakdown pie chart
-                if services.get('analytics'):
-                    cost_components = {
-                        'Migration Team': enhanced_migration_costs['migration_team_cost'],
-                        'Data Transfer': enhanced_migration_costs['recommended_transfer_cost'],
-                        'AWS DMS': enhanced_migration_costs['dms_cost'],
-                        'Infrastructure': enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['temp_storage_cost'],
-                        'Training': enhanced_migration_costs['training_costs'],
-                        'Tools & Services': enhanced_migration_costs['tool_costs'] + enhanced_migration_costs['aws_professional_services'],
-                        'Contingency': enhanced_migration_costs['contingency_cost']
-                    }
-                    
-                    cost_pie_fig = services['analytics'].create_cost_breakdown_pie(cost_components)
-                    st.plotly_chart(cost_pie_fig, use_container_width=True)
+            # Executive Dashboard
+            st.markdown("### 📊 Executive Dashboard")
             
-            # Enhanced migration costs breakdown
-            st.markdown("##### 🔍 Enhanced Migration Cost Breakdown")
+            # Main metrics grid
+            metric_col1, metric_col2, metric_col3, metric_col4, metric_col5 = st.columns(5)
             
-            migration_cost_data = {
-                'Cost Component': [
-                    'Migration Team', 'Data Transfer (Recommended)', 'AWS DMS Service', 
-                    'AWS DataSync', 'Network Infrastructure', 'Temporary Storage',
-                    'Backup Storage', 'Tools & Licenses', 'Training & Certification',
-                    'AWS Professional Services', 'Testing & Validation', 'Contingency (15%)'
-                ],
-                'Cost ($)': [
-                    enhanced_migration_costs['migration_team_cost'],
-                    enhanced_migration_costs['recommended_transfer_cost'],
-                    enhanced_migration_costs['dms_cost'],
-                    enhanced_migration_costs['datasync_cost'],
-                    enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost'],
-                    enhanced_migration_costs['temp_storage_cost'],
-                    enhanced_migration_costs['backup_storage_cost'],
-                    enhanced_migration_costs['tool_costs'],
-                    enhanced_migration_costs['training_costs'],
-                    enhanced_migration_costs['aws_professional_services'],
-                    enhanced_migration_costs['testing_costs'],
-                    enhanced_migration_costs['contingency_cost']
-                ],
-                'Description': [
-                    f'Team for {migration_timeline} months',
-                    f'{enhanced_migration_costs["data_transfer_breakdown"]["recommended"]["option"]["method"]}',
-                    f'Instance: {enhanced_migration_costs["dms_instance_type"]}',
-                    'Ongoing synchronization during migration',
-                    f'Setup + monitoring for {results["bandwidth_gbps"]} Gbps',
-                    f'Temporary storage during migration',
-                    'Backup storage during migration',
-                    'Migration tools and licenses',
-                    'Team training and certifications',
-                    'Expert consulting services',
-                    'Comprehensive testing strategy',
-                    '15% buffer for unforeseen costs'
-                ]
-            }
+            with metric_col1:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <p class="metric-value">${enhanced_migration_costs['total_migration_cost']:,.0f}</p>
+                    <p class="metric-label">Total Migration Cost</p>
+                </div>
+                """, unsafe_allow_html=True)
             
-            migration_df = pd.DataFrame(migration_cost_data)
-            migration_df['Cost ($)'] = migration_df['Cost ($)'].apply(lambda x: f"${x:,.0f}")
-            st.dataframe(migration_df, use_container_width=True)
+            with metric_col2:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <p class="metric-value">${enhanced_migration_costs['recommended_transfer_cost']:,.0f}</p>
+                    <p class="metric-label">Data Transfer Cost</p>
+                </div>
+                """, unsafe_allow_html=True)
             
-            # Data Transfer Analysis
-            st.markdown("##### 🚚 Data Transfer Options Analysis")
+            with metric_col3:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <p class="metric-value">{enhanced_migration_costs['estimated_transfer_days']:.1f} days</p>
+                    <p class="metric-label">Transfer Time</p>
+                </div>
+                """, unsafe_allow_html=True)
             
-            transfer_options = enhanced_migration_costs['data_transfer_breakdown']['all_options']
-            recommended_key = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option_key']
+            with metric_col4:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <p class="metric-value">${total_annual_savings:,.0f}</p>
+                    <p class="metric-label">Annual Savings</p>
+                </div>
+                """, unsafe_allow_html=True)
             
-            transfer_data = []
-            for option_key, option in transfer_options.items():
-                transfer_data.append({
-                    'Method': option['method'],
-                    'Cost ($)': f"${option['total_cost']:,.0f}",
-                    'Time (days)': f"{option['transfer_time_days']:.1f}",
-                    'Bandwidth': option.get('bandwidth', 'N/A'),
-                    'Suitability': option['suitability'],
-                    'Recommended': '✅' if option_key == recommended_key else '❌',
-                    'Score': f"{option.get('recommendation_score', 50)}/100"
-                })
+            with metric_col5:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <p class="metric-value">{roi_percentage:.1f}%</p>
+                    <p class="metric-label">3-Year ROI</p>
+                </div>
+                """, unsafe_allow_html=True)
             
-            transfer_df = pd.DataFrame(transfer_data)
-            st.dataframe(transfer_df, use_container_width=True)
+            st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
             
-            # Show recommended method details
-            recommended_option = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']
-            st.success(f"""
-            **Recommended Transfer Method:** {recommended_option['method']}
-            - **Cost:** ${recommended_option['total_cost']:,.0f}
-            - **Transfer Time:** {recommended_option['transfer_time_days']:.1f} days
-            - **Bandwidth:** {recommended_option.get('bandwidth', 'N/A')}
-            - **Pros:** {', '.join(recommended_option['pros'])}
-            """)
-        
+            # Detailed Analysis Sections
+            analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs([
+                "📊 Cost Analysis", "📈 Visual Analytics", "🎯 Migration Strategy", "🤖 AI Insights"
+            ])
+            
+            with analysis_tab1:
+                # Cost breakdown
+                st.markdown("#### 💰 Comprehensive Cost Analysis")
+                
+                cost_col1, cost_col2 = st.columns(2)
+                
+                with cost_col1:
+                    st.markdown("##### Current vs. Projected Costs")
+                    st.dataframe(cost_df[['Environment', 'Current_Total', 'AWS_Total_Cost', 'Annual_Savings', 'Savings_Percentage']], 
+                            use_container_width=True)
+                
+                with cost_col2:
+                    # Cost breakdown pie chart
+                    if services.get('analytics'):
+                        cost_components = {
+                            'Migration Team': enhanced_migration_costs['migration_team_cost'],
+                            'Data Transfer': enhanced_migration_costs['recommended_transfer_cost'],
+                            'AWS DMS': enhanced_migration_costs['dms_cost'],
+                            'Infrastructure': enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['temp_storage_cost'],
+                            'Training': enhanced_migration_costs['training_costs'],
+                            'Tools & Services': enhanced_migration_costs['tool_costs'] + enhanced_migration_costs['aws_professional_services'],
+                            'Contingency': enhanced_migration_costs['contingency_cost']
+                        }
+                        
+                        cost_pie_fig = services['analytics'].create_cost_breakdown_pie(cost_components)
+                        st.plotly_chart(cost_pie_fig, use_container_width=True)
+                
+                # Enhanced migration costs breakdown
+                st.markdown("##### 🔍 Enhanced Migration Cost Breakdown")
+                
+                migration_cost_data = {
+                    'Cost Component': [
+                        'Migration Team', 'Data Transfer (Recommended)', 'AWS DMS Service', 
+                        'AWS DataSync', 'Network Infrastructure', 'Temporary Storage',
+                        'Backup Storage', 'Tools & Licenses', 'Training & Certification',
+                        'AWS Professional Services', 'Testing & Validation', 'Contingency (15%)'
+                    ],
+                    'Cost ($)': [
+                        enhanced_migration_costs['migration_team_cost'],
+                        enhanced_migration_costs['recommended_transfer_cost'],
+                        enhanced_migration_costs['dms_cost'],
+                        enhanced_migration_costs['datasync_cost'],
+                        enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost'],
+                        enhanced_migration_costs['temp_storage_cost'],
+                        enhanced_migration_costs['backup_storage_cost'],
+                        enhanced_migration_costs['tool_costs'],
+                        enhanced_migration_costs['training_costs'],
+                        enhanced_migration_costs['aws_professional_services'],
+                        enhanced_migration_costs['testing_costs'],
+                        enhanced_migration_costs['contingency_cost']
+                    ],
+                    'Description': [
+                        f'Team for {migration_timeline} months',
+                        f'{enhanced_migration_costs["data_transfer_breakdown"]["recommended"]["option"]["method"]}',
+                        f'Instance: {enhanced_migration_costs["dms_instance_type"]}',
+                        'Ongoing synchronization during migration',
+                        f'Setup + monitoring for {results["bandwidth_gbps"]} Gbps',
+                        f'Temporary storage during migration',
+                        'Backup storage during migration',
+                        'Migration tools and licenses',
+                        'Team training and certifications',
+                        'Expert consulting services',
+                        'Comprehensive testing strategy',
+                        '15% buffer for unforeseen costs'
+                    ]
+                }
+                
+                migration_df = pd.DataFrame(migration_cost_data)
+                migration_df['Cost ($)'] = migration_df['Cost ($)'].apply(lambda x: f"${x:,.0f}")
+                st.dataframe(migration_df, use_container_width=True)
+                
+                # Data Transfer Analysis
+                st.markdown("##### 🚚 Data Transfer Options Analysis")
+                
+                transfer_options = enhanced_migration_costs['data_transfer_breakdown']['all_options']
+                recommended_key = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option_key']
+                
+                transfer_data = []
+                for option_key, option in transfer_options.items():
+                    transfer_data.append({
+                        'Method': option['method'],
+                        'Cost ($)': f"${option['total_cost']:,.0f}",
+                        'Time (days)': f"{option['transfer_time_days']:.1f}",
+                        'Bandwidth': option.get('bandwidth', 'N/A'),
+                        'Suitability': option['suitability'],
+                        'Recommended': '✅' if option_key == recommended_key else '❌',
+                        'Score': f"{option.get('recommendation_score', 50)}/100"
+                    })
+                
+                transfer_df = pd.DataFrame(transfer_data)
+                st.dataframe(transfer_df, use_container_width=True)
+                
+                # Show recommended method details
+                recommended_option = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']
+                st.success(f"""
+                **Recommended Transfer Method:** {recommended_option['method']}
+                - **Cost:** ${recommended_option['total_cost']:,.0f}
+                - **Transfer Time:** {recommended_option['transfer_time_days']:.1f} days
+                - **Bandwidth:** {recommended_option.get('bandwidth', 'N/A')}
+                - **Pros:** {', '.join(recommended_option['pros'])}
+                """)
+            
         with analysis_tab2:
             # Visual Analytics
             st.markdown("#### 📈 Visual Analytics Dashboard")
