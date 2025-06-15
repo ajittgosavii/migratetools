@@ -210,6 +210,27 @@ st.markdown("""
         margin: 3rem 0;
         border-radius: 1px;
     }
+    
+    .transfer-comparison-table {
+        background: white;
+        border-radius: 1rem;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        margin: 1rem 0;
+    }
+    
+    .transfer-option-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 1rem;
+        margin: 1rem 0;
+        border-left: 4px solid #17a2b8;
+    }
+    
+    .recommended-option {
+        border-left-color: #28a745;
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -409,7 +430,11 @@ class AWSPricingService:
             'network': {
                 'nat_gateway': 0.045,  # per hour
                 'data_transfer_out': 0.09,  # per GB
-                'vpc_endpoint': 0.01  # per hour
+                'vpc_endpoint': 0.01,  # per hour
+                'direct_connect_1gb': 0.30,  # per hour
+                'direct_connect_10gb': 2.25,  # per hour
+                'direct_connect_100gb': 22.50,  # per hour
+                'direct_connect_data': 0.02  # per GB
             },
             'security': {
                 'waf': 1.00,  # per web ACL per month
@@ -424,6 +449,19 @@ class AWSPricingService:
             'backup': {
                 'backup_storage': 0.05,  # per GB-month
                 'backup_restore': 0.02  # per GB
+            },
+            'migration_services': {
+                'dms_t3_micro': 0.020,
+                'dms_t3_small': 0.034,
+                'dms_t3_medium': 0.068,
+                'dms_t3_large': 0.136,
+                'dms_c5_large': 0.192,
+                'dms_c5_xlarge': 0.384,
+                'dms_r5_large': 0.252,
+                'dms_r5_xlarge': 0.504,
+                'datasync_per_gb': 0.0125,
+                'snowball_edge_storage': 300.00,  # per job
+                'snowball_edge_compute': 400.00   # per job
             }
         }
 
@@ -648,6 +686,167 @@ class EnterpriseAIService:
             - Optimize data transfer costs through strategic placement
             - Implement comprehensive monitoring to identify cost optimization opportunities
             """
+        }
+
+# Enhanced Data Transfer Calculator
+class EnhancedDataTransferCalculator:
+    def __init__(self):
+        self.dx_pricing = {
+            '1Gbps': {'hourly': 0.30, 'data_transfer': 0.02},
+            '10Gbps': {'hourly': 2.25, 'data_transfer': 0.02},
+            '100Gbps': {'hourly': 22.50, 'data_transfer': 0.02}
+        }
+        
+        self.aws_service_costs = {
+            'dms': {
+                'dms.t3.micro': 0.020,
+                'dms.t3.small': 0.034,
+                'dms.t3.medium': 0.068,
+                'dms.t3.large': 0.136,
+                'dms.c5.large': 0.192,
+                'dms.c5.xlarge': 0.384,
+                'dms.c5.2xlarge': 0.768,
+                'dms.r5.large': 0.252,
+                'dms.r5.xlarge': 0.504
+            },
+            'datasync': {
+                'per_gb_transferred': 0.0125,
+                'hourly_agent_cost': 0.04
+            },
+            'snowball': {
+                'snowball_edge_storage': 300.00,  # per job
+                'snowball_edge_compute': 400.00,  # per job
+                'snowmobile': 0.005  # per GB per month
+            }
+        }
+    
+    def calculate_transfer_options(self, data_size_tb: float, timeline_months: int) -> Dict[str, Any]:
+        """Calculate different data transfer options with costs and timelines"""
+        data_size_gb = data_size_tb * 1000
+        
+        options = {}
+        
+        # Option 1: Internet Transfer (Standard)
+        internet_bandwidth_mbps = 1000  # 1 Gbps
+        internet_transfer_days = (data_size_gb * 8) / (internet_bandwidth_mbps * 3600 * 24 / 1000)
+        
+        options['internet'] = {
+            'method': 'Internet Transfer',
+            'bandwidth': '1 Gbps',
+            'transfer_time_days': internet_transfer_days,
+            'infrastructure_cost': data_size_gb * 0.05,  # Network infrastructure
+            'aws_data_in_cost': 0,  # AWS doesn't charge for data IN
+            'total_cost': data_size_gb * 0.05,
+            'suitability': 'Small to medium datasets (<10 TB)',
+            'pros': ['Simple setup', 'No additional hardware'],
+            'cons': ['Slower transfer', 'Uses production bandwidth'],
+            'recommendation_score': 60 if data_size_tb <= 10 else 30
+        }
+        
+        # Option 2: Direct Connect 10Gbps
+        dx_10gb_bandwidth_mbps = 10000  # 10 Gbps
+        dx_transfer_days = (data_size_gb * 8) / (dx_10gb_bandwidth_mbps * 3600 * 24 / 1000)
+        dx_monthly_cost = self.dx_pricing['10Gbps']['hourly'] * 24 * 30
+        dx_duration_months = max(1, dx_transfer_days / 30)
+        
+        options['direct_connect_10gb'] = {
+            'method': 'AWS Direct Connect 10Gbps',
+            'bandwidth': '10 Gbps',
+            'transfer_time_days': dx_transfer_days,
+            'dx_monthly_cost': dx_monthly_cost,
+            'dx_total_cost': dx_monthly_cost * dx_duration_months,
+            'data_transfer_cost': data_size_gb * self.dx_pricing['10Gbps']['data_transfer'],
+            'setup_cost': 5000,  # One-time setup
+            'total_cost': (dx_monthly_cost * dx_duration_months + 
+                          data_size_gb * self.dx_pricing['10Gbps']['data_transfer'] + 5000),
+            'suitability': 'Large datasets (10-100 TB)',
+            'pros': ['Dedicated bandwidth', 'Predictable performance', 'Secure'],
+            'cons': ['Higher upfront cost', 'Setup time required'],
+            'recommendation_score': 90 if 10 <= data_size_tb <= 100 else 70
+        }
+        
+        # Option 3: AWS DataSync
+        datasync_agent_hours = dx_transfer_days * 24
+        options['datasync'] = {
+            'method': 'AWS DataSync',
+            'bandwidth': 'Up to 10 Gbps (depends on network)',
+            'transfer_time_days': dx_transfer_days,  # Assuming good network
+            'data_transfer_cost': data_size_gb * self.aws_service_costs['datasync']['per_gb_transferred'],
+            'agent_cost': datasync_agent_hours * self.aws_service_costs['datasync']['hourly_agent_cost'],
+            'total_cost': (data_size_gb * self.aws_service_costs['datasync']['per_gb_transferred'] + 
+                          datasync_agent_hours * self.aws_service_costs['datasync']['hourly_agent_cost']),
+            'suitability': 'Online data transfer with validation',
+            'pros': ['Built-in validation', 'Incremental transfer', 'Monitoring'],
+            'cons': ['Per-GB pricing', 'Network dependent'],
+            'recommendation_score': 80 if data_size_tb <= 50 else 60
+        }
+        
+        # Option 4: AWS DMS (Database Migration Service)
+        dms_instance = 'dms.r5.xlarge' if data_size_tb > 50 else 'dms.c5.large'
+        dms_hourly_cost = self.aws_service_costs['dms'][dms_instance]
+        dms_duration_hours = max(48, dx_transfer_days * 24)  # Minimum 48 hours
+        
+        options['dms'] = {
+            'method': 'AWS Database Migration Service',
+            'instance_type': dms_instance,
+            'transfer_time_days': dms_duration_hours / 24,
+            'dms_instance_cost': dms_hourly_cost * dms_duration_hours,
+            'data_transfer_cost': data_size_gb * 0.01,  # Estimated data processing
+            'total_cost': dms_hourly_cost * dms_duration_hours + data_size_gb * 0.01,
+            'suitability': 'Database-specific migration with CDC',
+            'pros': ['Database-native', 'Change Data Capture', 'Minimal downtime'],
+            'cons': ['Complex setup', 'Database-specific limitations'],
+            'recommendation_score': 85
+        }
+        
+        # Option 5: AWS Snowball (for very large datasets)
+        if data_size_tb > 50:
+            num_snowballs = max(1, int(data_size_tb / 80))  # 80TB per Snowball Edge
+            snowball_transfer_days = num_snowballs * 7  # 7 days per device cycle
+            
+            options['snowball'] = {
+                'method': 'AWS Snowball Edge',
+                'capacity': f"{num_snowballs} devices @ 80TB each",
+                'transfer_time_days': snowball_transfer_days,
+                'device_cost': num_snowballs * self.aws_service_costs['snowball']['snowball_edge_storage'],
+                'shipping_cost': num_snowballs * 50,  # Estimated shipping
+                'total_cost': (num_snowballs * self.aws_service_costs['snowball']['snowball_edge_storage'] + 
+                              num_snowballs * 50),
+                'suitability': 'Very large datasets (>50 TB)',
+                'pros': ['Offline transfer', 'No bandwidth limitations', 'Secure'],
+                'cons': ['Physical logistics', 'Longer timeline', 'Manual process'],
+                'recommendation_score': 95 if data_size_tb > 100 else 75
+            }
+        
+        return options
+    
+    def get_recommended_option(self, data_size_tb: float, timeline_months: int, 
+                              budget_constraint: float = None) -> Dict[str, Any]:
+        """Get recommended transfer option based on requirements"""
+        options = self.calculate_transfer_options(data_size_tb, timeline_months)
+        
+        recommendations = []
+        
+        for option_key, option in options.items():
+            if budget_constraint and option['total_cost'] > budget_constraint:
+                continue
+                
+            # Use the built-in recommendation score
+            score = option.get('recommendation_score', 50)
+            
+            recommendations.append({
+                'option_key': option_key,
+                'option': option,
+                'score': score
+            })
+        
+        # Sort by score
+        recommendations.sort(key=lambda x: x['score'], reverse=True)
+        
+        return {
+            'recommended': recommendations[0] if recommendations else None,
+            'all_options': options,
+            'ranking': recommendations
         }
 
 # PDF Report Generator
@@ -907,6 +1106,54 @@ class EnterpriseAnalytics:
         
         return fig
 
+    def create_transfer_comparison_chart(self, transfer_options: Dict[str, Any]) -> go.Figure:
+        """Create data transfer options comparison chart"""
+        methods = []
+        costs = []
+        times = []
+        scores = []
+        
+        for option_key, option in transfer_options.items():
+            methods.append(option['method'])
+            costs.append(option['total_cost'])
+            times.append(option['transfer_time_days'])
+            scores.append(option.get('recommendation_score', 50))
+        
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('Transfer Costs', 'Transfer Times', 'Recommendation Scores', 'Cost vs Time'),
+            specs=[[{'type': 'bar'}, {'type': 'bar'}],
+                   [{'type': 'bar'}, {'type': 'scatter'}]]
+        )
+        
+        # Cost comparison
+        fig.add_trace(
+            go.Bar(x=methods, y=costs, name='Cost ($)', marker_color='lightblue'),
+            row=1, col=1
+        )
+        
+        # Time comparison
+        fig.add_trace(
+            go.Bar(x=methods, y=times, name='Time (days)', marker_color='lightgreen'),
+            row=1, col=2
+        )
+        
+        # Score comparison
+        fig.add_trace(
+            go.Bar(x=methods, y=scores, name='Score', marker_color='orange'),
+            row=2, col=1
+        )
+        
+        # Cost vs Time scatter
+        fig.add_trace(
+            go.Scatter(x=times, y=costs, mode='markers+text', text=methods,
+                      textposition='top center', name='Options', marker_size=10),
+            row=2, col=2
+        )
+        
+        fig.update_layout(height=800, showlegend=False, title_text="Data Transfer Options Analysis")
+        return fig
+
 # Initialize services without caching to avoid attribute errors
 def initialize_services():
     """Initialize all services without caching"""
@@ -1062,33 +1309,48 @@ Annual Savings: ${total_annual_savings:,.0f}
 Migration Timeline: {migration_timeline} months
 Complexity Score: {complexity_score}/100
 
-MIGRATION COSTS BREAKDOWN
-========================
+ENHANCED MIGRATION COSTS BREAKDOWN
+==================================
 Total Investment: ${migration_costs['total_migration_cost']:,.0f}
 
 Detailed Breakdown:
 • Migration Team: ${migration_costs['migration_team_cost']:,.0f}
-• On-Premise Data Transfer: ${migration_costs['onpremise_data_transfer_cost']:,.0f}
-• AWS Internal Transfer: ${migration_costs['aws_internal_transfer_cost']:,.0f}
-• Database Migration Service: ${migration_costs['dms_cost']:,.0f}
-• Network Setup & VPN: ${migration_costs['network_setup_cost']:,.0f}
+• Data Transfer (Recommended): ${migration_costs['recommended_transfer_cost']:,.0f}
+• AWS DMS Service: ${migration_costs['dms_cost']:,.0f}
+• AWS DataSync: ${migration_costs['datasync_cost']:,.0f}
+• Network Infrastructure: ${migration_costs['network_setup_cost'] + migration_costs['network_monitoring_cost']:,.0f}
 • Temporary Storage: ${migration_costs['temp_storage_cost']:,.0f}
+• Backup Storage: ${migration_costs['backup_storage_cost']:,.0f}
 • Tools & Licenses: ${migration_costs['tool_costs']:,.0f}
 • Training: ${migration_costs['training_costs']:,.0f}
+• AWS Professional Services: ${migration_costs['aws_professional_services']:,.0f}
+• Testing & Validation: ${migration_costs['testing_costs']:,.0f}
 • Contingency (15%): ${migration_costs['contingency_cost']:,.0f}
 
 DATA TRANSFER ANALYSIS
 =====================
 Data Size: {data_size_tb} TB
-On-Premise Transfer Rate: $0.05/GB (network infrastructure)
-AWS Internal Transfer Rate: $0.02/GB (cross-AZ replication)
-Total Data Transfer Cost: ${migration_costs['total_data_transfer_cost']:,.0f}
+Recommended Method: {migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
+Transfer Time: {migration_costs['estimated_transfer_days']:.1f} days
+Bandwidth: {migration_costs['bandwidth_gbps']} Gbps
+Transfer Cost: ${migration_costs['recommended_transfer_cost']:,.0f}
 
-Key Considerations:
-• Network bandwidth planning required for {data_size_tb * 1000} GB transfer
-• Parallel transfer streams recommended to minimize downtime
-• VPN or Direct Connect setup for secure data transfer
-• Cross-AZ replication for high availability during migration
+Key Transfer Considerations:
+• Bandwidth planning for {data_size_tb * 1000} GB transfer
+• {migration_costs['data_transfer_breakdown']['recommended']['option']['suitability']}
+• Estimated timeline: {migration_costs['estimated_transfer_days']:.1f} days
+• Direct Connect setup for dedicated bandwidth
+
+AWS SERVICES CONFIGURATION
+==========================
+Database Migration Service:
+• Instance Type: {migration_costs['dms_instance_type']}
+• Duration: {migration_costs['dms_duration_hours']:.0f} hours
+• Cost: ${migration_costs['dms_cost']:,.0f}
+
+DataSync Service:
+• Cost: ${migration_costs['datasync_cost']:,.0f}
+• Purpose: Ongoing synchronization during migration
 
 RECOMMENDED STRATEGY
 ===================
@@ -1107,28 +1369,30 @@ RISK FACTORS
 
 NETWORK INFRASTRUCTURE REQUIREMENTS
 ===================================
-• Bandwidth: Minimum 1 Gbps for efficient {data_size_tb} TB transfer
-• VPN/Direct Connect: Required for secure data transfer
-• Transfer Time Estimate: {(data_size_tb * 1000 * 8) / (1000 * 3600 * 24):.1f} days at 1 Gbps
-• Redundancy: Dual network paths recommended for business continuity
+• Bandwidth: {migration_costs['bandwidth_gbps']} Gbps for efficient transfer
+• Transfer Method: {migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
+• Transfer Time Estimate: {migration_costs['estimated_transfer_days']:.1f} days
+• Setup Cost: Network infrastructure and monitoring
+• Redundancy: Built into recommended solution
 
 NEXT STEPS
 ==========
 1. Stakeholder approval and budget allocation
-2. Network infrastructure assessment and bandwidth planning
-3. Data transfer strategy and timeline development
+2. {migration_costs['data_transfer_breakdown']['recommended']['option']['method']} setup
+3. AWS DMS configuration with {migration_costs['dms_instance_type']} instance
 4. Migration team formation and training
-5. VPN/Direct Connect setup for secure data transfer
+5. Network infrastructure setup for {migration_costs['bandwidth_gbps']} Gbps
 6. Environment setup and testing
-7. Phased migration execution with proper monitoring
+7. Phased migration execution with comprehensive monitoring
 8. Post-migration optimization and performance tuning
 
 COST OPTIMIZATION RECOMMENDATIONS
 =================================
-• Use AWS Direct Connect for large data transfers (>10 TB)
-• Consider AWS Snowball family for very large datasets (>50 TB)
-• Implement data compression to reduce transfer volumes
-• Schedule transfers during off-peak hours to minimize impact
+• Implement {migration_costs['data_transfer_breakdown']['recommended']['option']['method']} for optimal transfer
+• Use AWS DMS for database-native migration with CDC
+• Configure DataSync for ongoing synchronization
+• Leverage AWS Professional Services for expertise
+• Implement comprehensive testing strategy
 • Use Reserved Instances for predictable workloads post-migration
 """
 
@@ -1326,60 +1590,90 @@ def recommend_instances(servers):
     
     return recommendations
 
-def calculate_migration_costs(data_size_tb, timeline_months, complexity_score):
-    """Enhanced migration cost calculation including on-premise data transfer"""
-    # Base costs adjusted for enterprise scale
-    base_monthly_cost = 25000  # Increased base for enterprise
-    complexity_multiplier = 1 + (complexity_score / 80)  # More aggressive scaling
+def calculate_enhanced_migration_costs(data_size_tb, timeline_months, complexity_score, 
+                                     use_direct_connect=True, bandwidth_gbps=10):
+    """Enhanced migration cost calculation with detailed data transfer options"""
+    
+    # Initialize transfer calculator
+    transfer_calc = EnhancedDataTransferCalculator()
+    
+    # Get transfer recommendations
+    transfer_analysis = transfer_calc.get_recommended_option(data_size_tb, timeline_months)
+    recommended_option = transfer_analysis['recommended']['option']
+    
+    # Base migration costs
+    base_monthly_cost = 25000
+    complexity_multiplier = 1 + (complexity_score / 80)
     monthly_cost = base_monthly_cost * complexity_multiplier
     
     migration_team_cost = monthly_cost * timeline_months
     
-    # Enhanced cost components
-    # On-premise to AWS data transfer costs (initial migration)
-    # AWS charges for data IN from internet: $0.00/GB (free)
-    # But network infrastructure and bandwidth costs from on-premise
-    onpremise_transfer_cost = data_size_tb * 1000 * 0.05  # Network infrastructure costs per GB
+    # Enhanced cost components using recommended transfer method
+    data_transfer_cost = recommended_option['total_cost']
     
-    # AWS internal data transfer for migration tools
-    aws_internal_transfer = data_size_tb * 1000 * 0.02  # Internal AWS data movement
+    # AWS Database Migration Service costs
+    dms_instance_type = 'dms.r5.xlarge' if data_size_tb > 50 else 'dms.c5.large'
+    dms_hourly_rates = {
+        'dms.c5.large': 0.192,
+        'dms.c5.xlarge': 0.384,
+        'dms.r5.large': 0.252,
+        'dms.r5.xlarge': 0.504
+    }
+    dms_duration_hours = max(72, (data_size_tb / bandwidth_gbps) * 24)
+    dms_cost = dms_hourly_rates[dms_instance_type] * dms_duration_hours
     
-    # Migration tools and database migration service
-    tool_licensing_cost = 8000 * timeline_months  # Enterprise migration tools
+    # AWS DataSync costs
+    datasync_cost = data_size_tb * 1000 * 0.0125 * 0.1  # 10% for ongoing sync
     
-    # Database Migration Service (DMS) costs
-    dms_cost = timeline_months * 0.193 * 24 * 30  # r5.large DMS instance cost per month
+    # Network infrastructure and monitoring
+    network_setup_cost = 10000 if use_direct_connect else 3000
+    network_monitoring_cost = timeline_months * 500
     
-    # Training cost
-    training_cost = 15000 + (timeline_months * 2000)  # Comprehensive training
+    # Enhanced storage costs during migration
+    temp_storage_cost = data_size_tb * 0.08 * timeline_months * 1.5
+    backup_storage_cost = data_size_tb * 0.05 * timeline_months
     
-    # Network setup and VPN costs during migration
-    network_setup_cost = 5000 + (timeline_months * 500)  # VPN and network infrastructure
+    # Tools and licensing
+    tool_licensing_cost = 12000 * timeline_months
     
-    # Storage costs during migration (temporary duplicate storage)
-    temp_storage_cost = data_size_tb * 0.08 * timeline_months  # EBS storage for migration period
+    # Training and certification
+    training_cost = 20000 + (timeline_months * 3000)
     
-    # Total data transfer cost
-    total_data_transfer_cost = onpremise_transfer_cost + aws_internal_transfer
+    # Professional services
+    aws_professional_services = 50000 if data_size_tb > 100 else 25000
     
-    # Contingency
-    base_costs = migration_team_cost + total_data_transfer_cost + tool_licensing_cost + training_cost + dms_cost + network_setup_cost + temp_storage_cost
-    contingency = base_costs * 0.15  # 15% contingency
+    # Testing and validation
+    testing_cost = migration_team_cost * 0.3
     
+    # Calculate totals
+    base_costs = (migration_team_cost + data_transfer_cost + dms_cost + datasync_cost +
+                 network_setup_cost + network_monitoring_cost + temp_storage_cost +
+                 backup_storage_cost + tool_licensing_cost + training_cost +
+                 aws_professional_services + testing_cost)
+    
+    contingency = base_costs * 0.15
     total_cost = base_costs + contingency
     
     return {
         'migration_team_cost': migration_team_cost,
-        'onpremise_data_transfer_cost': onpremise_transfer_cost,
-        'aws_internal_transfer_cost': aws_internal_transfer,
-        'total_data_transfer_cost': total_data_transfer_cost,
+        'data_transfer_breakdown': transfer_analysis,
+        'recommended_transfer_cost': data_transfer_cost,
         'dms_cost': dms_cost,
+        'dms_instance_type': dms_instance_type,
+        'dms_duration_hours': dms_duration_hours,
+        'datasync_cost': datasync_cost,
         'network_setup_cost': network_setup_cost,
+        'network_monitoring_cost': network_monitoring_cost,
         'temp_storage_cost': temp_storage_cost,
+        'backup_storage_cost': backup_storage_cost,
         'tool_costs': tool_licensing_cost,
         'training_costs': training_cost,
+        'aws_professional_services': aws_professional_services,
+        'testing_costs': testing_cost,
         'contingency_cost': contingency,
-        'total_migration_cost': total_cost
+        'total_migration_cost': total_cost,
+        'bandwidth_gbps': bandwidth_gbps,
+        'estimated_transfer_days': recommended_option.get('transfer_time_days', 0)
     }
 
 def get_migration_strategy(complexity_score):
@@ -1425,365 +1719,11 @@ def get_migration_strategy(complexity_score):
             'effort': 'Maximum'
         }
 
-# Simplified analysis display function to avoid circular dependencies
-def display_comprehensive_results(services, cost_df, complexity_score, complexity_details, 
-                                risk_factors, strategy, migration_costs, ai_analyses, 
-                                servers, data_size_tb, migration_timeline, num_pl_sql_objects,
-                                pricing_data):
-    """Display comprehensive analysis results"""
-    
-    st.success("✅ Enterprise Analysis Complete!")
-    
-    # Executive Dashboard
-    st.markdown('<div class="analysis-section">', unsafe_allow_html=True)
-    st.markdown('<div class="config-header">📊 Executive Dashboard</div>', unsafe_allow_html=True)
-    
-    total_current_cost = cost_df['Current_Total'].sum()
-    total_aws_cost = cost_df['AWS_Total_Cost'].sum()
-    total_annual_savings = cost_df['Annual_Savings'].sum()
-    three_year_savings = total_annual_savings * 3
-    roi_percentage = (three_year_savings - migration_costs['total_migration_cost']) / migration_costs['total_migration_cost'] * 100 if migration_costs['total_migration_cost'] > 0 else 0
-    
-    metrics_data = [
-        {"label": "Current Annual Cost", "value": f"${total_current_cost:,.0f}", "delta": "", "type": "current"},
-        {"label": "Projected AWS Cost", "value": f"${total_aws_cost:,.0f}", "delta": f"-{((total_current_cost-total_aws_cost)/total_current_cost*100):.1f}%", "type": "projected"},
-        {"label": "Annual Savings", "value": f"${total_annual_savings:,.0f}", "delta": "💰", "type": "savings"},
-        {"label": "3-Year ROI", "value": f"{roi_percentage:.1f}%", "delta": "📈", "type": "roi"},
-        {"label": "Complexity Score", "value": f"{complexity_score}/100", "delta": strategy['risk'], "type": "complexity"},
-        {"label": "Migration Timeline", "value": f"{migration_timeline} months", "delta": strategy['strategy'], "type": "timeline"}
-    ]
-    
-    cols = st.columns(3)
-    for i, metric in enumerate(metrics_data):
-        with cols[i % 3]:
-            st.markdown(f"""
-            <div class="metric-card">
-                <p class="metric-label">{metric['label']}</p>
-                <p class="metric-value">{metric['value']}</p>
-                <small style="color: #4299e1; font-weight: 600;">{metric['delta']}</small>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Simplified visualization section
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-    st.subheader("📊 Analysis Results")
-    
-    # Cost comparison chart
-    environments = cost_df['Environment']
-    current_costs = cost_df['Current_Total']
-    aws_costs = cost_df['AWS_Total_Cost']
-    
-    cost_comparison_fig = go.Figure()
-    
-    cost_comparison_fig.add_trace(go.Bar(
-        name='Current Oracle Costs',
-        x=environments,
-        y=current_costs,
-        marker_color='#FF6B6B',
-        text=[f'${cost:,.0f}' for cost in current_costs],
-        textposition='auto'
-    ))
-    
-    cost_comparison_fig.add_trace(go.Bar(
-        name='Projected AWS Costs',
-        x=environments,
-        y=aws_costs,
-        marker_color='#4ECDC4',
-        text=[f'${cost:,.0f}' for cost in aws_costs],
-        textposition='auto'
-    ))
-    
-    cost_comparison_fig.update_layout(
-        title='Cost Comparison by Environment',
-        xaxis_title='Environment',
-        yaxis_title='Annual Cost ($)',
-        barmode='group',
-        height=500
-    )
-    
-    st.plotly_chart(cost_comparison_fig, use_container_width=True)
-    
-    # Display detailed cost table
-    st.subheader("Detailed Cost Analysis")
-    display_df = cost_df.copy()
-    currency_cols = [col for col in display_df.columns if 'Cost' in col or 'Savings' in col]
-    for col in currency_cols:
-        display_df[col] = display_df[col].apply(lambda x: f"${x:,.0f}")
-    display_df['Savings_Percentage'] = cost_df['Savings_Percentage'].apply(lambda x: f"{x:.1f}%")
-    
-    st.dataframe(display_df, use_container_width=True)
-    
-    # Migration cost breakdown with enhanced networking costs
-    st.subheader("Migration Investment Breakdown")
-    migration_breakdown = {
-        'Category': [
-            'Migration Team', 
-            'On-Premise Data Transfer', 
-            'AWS Internal Transfer',
-            'Database Migration Service',
-            'Network Setup & VPN',
-            'Temporary Storage',
-            'Tools & Licenses', 
-            'Training',
-            'Contingency',
-            'Total'
-        ],
-        'Cost': [
-            f"${migration_costs['migration_team_cost']:,.0f}",
-            f"${migration_costs['onpremise_data_transfer_cost']:,.0f}",
-            f"${migration_costs['aws_internal_transfer_cost']:,.0f}",
-            f"${migration_costs['dms_cost']:,.0f}",
-            f"${migration_costs['network_setup_cost']:,.0f}",
-            f"${migration_costs['temp_storage_cost']:,.0f}",
-            f"${migration_costs['tool_costs']:,.0f}",
-            f"${migration_costs['training_costs']:,.0f}",
-            f"${migration_costs['contingency_cost']:,.0f}",
-            f"${migration_costs['total_migration_cost']:,.0f}"
-        ],
-        'Description': [
-            'Project team and consulting fees',
-            'Network infrastructure for data transfer from on-premise',
-            'AWS internal data movement and replication',
-            'AWS Database Migration Service instances',
-            'VPN setup and network infrastructure during migration',
-            f'Temporary storage during migration period ({data_size_tb} TB)',
-            'Software licenses and migration utilities',
-            'Team training and certification',
-            '15% contingency buffer for unexpected costs',
-            'Total migration investment'
-        ]
-    }
-    
-    migration_df = pd.DataFrame(migration_breakdown)
-    st.dataframe(migration_df, use_container_width=True)
-    
-    # Data transfer cost breakdown
-    st.info(f"""
-    **📡 Data Transfer Cost Breakdown:**
-    
-    • **On-Premise to AWS:** ${migration_costs['onpremise_data_transfer_cost']:,.0f} 
-      - Network infrastructure and bandwidth costs
-      - Based on {data_size_tb} TB at $0.05/GB for network infrastructure
-      
-    • **AWS Internal Transfer:** ${migration_costs['aws_internal_transfer_cost']:,.0f}
-      - Internal AWS data movement and replication
-      - Cross-AZ transfers during migration process
-      
-    • **Total Data Transfer:** ${migration_costs['total_data_transfer_cost']:,.0f}
-      - Critical component of migration budget
-      - Includes redundancy and validation transfers
-    """)
-    
-    # Export Options Section
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-    st.markdown('<div class="download-section">', unsafe_allow_html=True)
-    st.markdown("### 📥 Export Comprehensive Reports")
-    st.markdown("Download detailed analysis reports for stakeholders and implementation teams")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # CSV Export
-        csv_data = cost_df.to_csv(index=False)
-        st.download_button(
-            label="📊 Cost Analysis (CSV)",
-            data=csv_data,
-            file_name=f"oracle_mongodb_cost_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-    
-    with col2:
-        # JSON Configuration
-        config_data = {
-            'analysis_metadata': {
-                'generated_date': datetime.now().isoformat(),
-                'complexity_score': complexity_score,
-                'total_savings': float(total_annual_savings),
-                'migration_timeline_months': migration_timeline
-            },
-            'servers': servers,
-            'recommendations': {env: rec for env, rec in zip(servers.keys(), [recommend_instances({env: servers[env]})[env] for env in servers.keys()])},
-            'cost_analysis': cost_df.to_dict('records'),
-            'migration_costs': migration_costs,
-            'strategy': strategy,
-            'risk_factors': risk_factors,
-            'ai_analyses': ai_analyses if ai_analyses else {}
-        }
-        
-        json_data = json.dumps(config_data, indent=2, default=str)
-        st.download_button(
-            label="⚙️ Configuration (JSON)",
-            data=json_data,
-            file_name=f"oracle_mongodb_config_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-            mime="application/json",
-            use_container_width=True
-        )
-    
-    with col3:
-        # PDF Report - Enhanced availability checking
-        pdf_available = services.get('pdf') and PDF_AVAILABLE
-        
-        if pdf_available:
-            try:
-                analysis_data = {
-                    'total_current_cost': total_current_cost,
-                    'total_aws_cost': total_aws_cost,
-                    'total_annual_savings': total_annual_savings,
-                    'complexity_score': complexity_score,
-                    'timeline_months': migration_timeline,
-                    'three_year_roi': roi_percentage,
-                    'strategy': strategy,
-                    'cost_df': cost_df,
-                    'migration_costs': migration_costs,
-                    'ai_analyses': ai_analyses,
-                    'data_size_tb': data_size_tb
-                }
-                
-                pdf_buffer = services['pdf'].generate_report(analysis_data)
-                st.download_button(
-                    label="📋 Executive Report (PDF)",
-                    data=pdf_buffer.getvalue(),
-                    file_name=f"oracle_mongodb_executive_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    help="Download comprehensive PDF report with charts and analysis"
-                )
-                st.success("✅ PDF generation ready")
-                
-            except Exception as e:
-                st.error(f"❌ PDF generation failed: {str(e)}")
-                st.info("💡 Falling back to text report")
-                
-                # Fallback to text report
-                summary_report = generate_text_report(
-                    total_current_cost, total_aws_cost, total_annual_savings, 
-                    roi_percentage, migration_timeline, complexity_score,
-                    migration_costs, strategy, servers, risk_factors, data_size_tb
-                )
-                
-                st.download_button(
-                    label="📄 Summary Report (TXT)",
-                    data=summary_report,
-                    file_name=f"oracle_mongodb_summary_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-        else:
-            # Show why PDF isn't available and provide alternatives
-            if not PDF_AVAILABLE:
-                st.error("❌ PDF generation unavailable")
-                st.code("pip install reportlab", language="bash")
-                st.info("💡 Install reportlab package to enable PDF reports")
-            elif not services.get('pdf'):
-                st.warning("⚠️ PDF service initialization failed")
-                st.info("💡 PDF generation temporarily unavailable")
-            
-            # Always provide text alternative
-            summary_report = generate_text_report(
-                total_current_cost, total_aws_cost, total_annual_savings, 
-                roi_percentage, migration_timeline, complexity_score,
-                migration_costs, strategy, servers, risk_factors, data_size_tb
-            )
-            
-            st.download_button(
-                label="📄 Summary Report (TXT)",
-                data=summary_report,
-                file_name=f"oracle_mongodb_summary_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                mime="text/plain",
-                use_container_width=True,
-                help="Download detailed text summary report"
-            )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Risk factors
-    if risk_factors:
-        st.subheader("🎯 Risk Assessment")
-        for i, risk in enumerate(risk_factors):
-            risk_level = "high" if i < 2 else "medium" if i < 4 else "low"
-            st.markdown(f"""
-            <div class="metric-card risk-{risk_level}">
-                <strong>Risk {i+1}:</strong> {risk}
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Network Transfer Planning Section
-    st.subheader("🌐 Data Transfer Planning")
-    transfer_time_days = (data_size_tb * 1000 * 8) / (1000 * 3600 * 24)  # Transfer time at 1 Gbps
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(
-            label="Data Volume",
-            value=f"{data_size_tb} TB",
-            delta=f"{data_size_tb * 1000:,.0f} GB"
-        )
-    with col2:
-        st.metric(
-            label="Transfer Cost",
-            value=f"${migration_costs['total_data_transfer_cost']:,.0f}",
-            delta=f"${migration_costs['total_data_transfer_cost']/data_size_tb:,.2f}/TB"
-        )
-    with col3:
-        st.metric(
-            label="Est. Transfer Time",
-            value=f"{transfer_time_days:.1f} days",
-            delta="@ 1 Gbps bandwidth"
-        )
-    
-    st.info(f"""
-    **🔗 Network Transfer Recommendations:**
-    
-    • **Bandwidth Planning:** Minimum 1 Gbps connection recommended for {data_size_tb} TB transfer
-    • **Direct Connect:** Consider AWS Direct Connect for dedicated bandwidth and reduced costs on large transfers
-    • **Snowball Option:** For datasets >50 TB, consider AWS Snowball for offline data transfer
-    • **Compression:** Implement data compression to reduce transfer volume by 30-50%
-    • **Parallel Streams:** Use multiple transfer streams to maximize throughput
-    • **Monitoring:** Implement transfer monitoring and checkpointing for reliability
-    """)
-    
-    # Transfer cost breakdown visualization
-    transfer_breakdown = {
-        'Transfer Type': ['On-Premise Infrastructure', 'AWS Internal Movement', 'Network Setup'],
-        'Cost': [
-            migration_costs['onpremise_data_transfer_cost'],
-            migration_costs['aws_internal_transfer_cost'], 
-            migration_costs['network_setup_cost']
-        ]
-    }
-    
-    transfer_fig = go.Figure(data=[go.Pie(
-        labels=transfer_breakdown['Transfer Type'],
-        values=transfer_breakdown['Cost'],
-        hole=0.3,
-        textinfo='label+percent+value',
-        texttemplate='%{label}<br>%{percent}<br>$%{value:,.0f}',
-        marker=dict(colors=['#FF9999', '#66B2FF', '#99FF99'])
-    )])
-    
-    transfer_fig.update_layout(
-        title="Data Transfer Cost Breakdown",
-        height=400
-    )
-    
-    st.plotly_chart(transfer_fig, use_container_width=True)
-    
-    # AI Analysis
-    if ai_analyses:
-        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-        st.subheader("🤖 AI Analysis")
-        
-        for analysis_type, content in ai_analyses.items():
-            with st.expander(f"{analysis_type.replace('_', ' ').title()}", expanded=False):
-                st.markdown(content)
-
-# Main analysis function
+# Analysis function
 def analyze_migration(services, servers, oracle_license_cost, manpower_cost, data_size_tb, 
                      migration_timeline, num_pl_sql_objects, num_applications, enable_ai,
-                     migration_budget, training_budget, contingency_percent, aws_region):
+                     migration_budget, training_budget, contingency_percent, aws_region,
+                     use_direct_connect, bandwidth_gbps):
     """Perform comprehensive migration analysis"""
     
     with st.spinner('🔄 Performing comprehensive analysis...'):
@@ -1797,16 +1737,17 @@ def analyze_migration(services, servers, oracle_license_cost, manpower_cost, dat
         if services.get('pricing'):
             pricing_data = services['pricing'].get_comprehensive_aws_services_pricing()
         else:
-            # Fallback pricing
+            # Fallback pricing with enhanced services
             pricing_data = {
                 'ec2': {'t3.medium': 0.0416, 't3.large': 0.0832, 'm5.large': 0.096, 'm5.xlarge': 0.192, 'r5.xlarge': 0.252, 'r5.2xlarge': 0.504},
                 'rds': {'db.m5.xlarge': 0.384, 'db.r5.xlarge': 0.480, 'db.r5.2xlarge': 0.960},
                 'mongodb_atlas': {'M10': 0.08, 'M20': 0.12, 'M30': 0.54, 'M40': 1.08, 'M50': 2.16, 'M60': 4.32},
                 'storage': {'ebs_gp2': 0.10, 'ebs_gp3': 0.08, 's3_standard': 0.023},
-                'network': {'nat_gateway': 0.045, 'data_transfer_out': 0.09, 'vpc_endpoint': 0.01},
+                'network': {'nat_gateway': 0.045, 'data_transfer_out': 0.09, 'vpc_endpoint': 0.01, 'direct_connect_10gb': 2.25, 'direct_connect_data': 0.02},
                 'security': {'waf': 1.00, 'secrets_manager': 0.40},
                 'monitoring': {'cloudwatch_logs': 0.50, 'cloudwatch_metrics': 0.30},
-                'backup': {'backup_storage': 0.05, 'backup_restore': 0.02}
+                'backup': {'backup_storage': 0.05, 'backup_restore': 0.02},
+                'migration_services': {'dms_c5_large': 0.192, 'dms_r5_xlarge': 0.504, 'datasync_per_gb': 0.0125}
             }
         
         # Step 2: Generate recommendations
@@ -1822,18 +1763,23 @@ def analyze_migration(services, servers, oracle_license_cost, manpower_cost, dat
         
         # Step 4: Complexity analysis
         status_text.text("🎯 Analyzing migration complexity...")
-        progress_bar.progress(80)
+        progress_bar.progress(70)
         complexity_score, complexity_details, risk_factors = enhanced_complexity_analysis(
             servers, data_size_tb, num_pl_sql_objects, num_applications
         )
         
-        # Step 5: Migration costs and strategy
-        status_text.text("🚚 Calculating migration strategy...")
-        progress_bar.progress(90)
-        migration_costs = calculate_migration_costs(data_size_tb, migration_timeline, complexity_score)
+        # Step 5: Enhanced migration costs and transfer analysis
+        status_text.text("🚚 Calculating enhanced migration strategy...")
+        progress_bar.progress(80)
+        enhanced_migration_costs = calculate_enhanced_migration_costs(
+            data_size_tb, migration_timeline, complexity_score, 
+            use_direct_connect, bandwidth_gbps
+        )
         strategy = get_migration_strategy(complexity_score)
         
         # Step 6: AI Analysis
+        status_text.text("🤖 Generating AI insights...")
+        progress_bar.progress(90)
         ai_analyses = {}
         if enable_ai and services.get('ai'):
             try:
@@ -1850,18 +1796,33 @@ def analyze_migration(services, servers, oracle_license_cost, manpower_cost, dat
         progress_bar.progress(100)
         status_text.text("✅ Analysis complete!")
         
+        # Store results in session state
+        st.session_state.analysis_results = {
+            'cost_df': cost_df,
+            'complexity_score': complexity_score,
+            'complexity_details': complexity_details,
+            'risk_factors': risk_factors,
+            'strategy': strategy,
+            'enhanced_migration_costs': enhanced_migration_costs,
+            'ai_analyses': ai_analyses,
+            'servers': servers,
+            'data_size_tb': data_size_tb,
+            'migration_timeline': migration_timeline,
+            'num_pl_sql_objects': num_pl_sql_objects,
+            'pricing_data': pricing_data,
+            'use_direct_connect': use_direct_connect,
+            'bandwidth_gbps': bandwidth_gbps
+        }
+        
         # Clear progress indicators
         progress_bar.empty()
         status_text.empty()
     
-    # Display Results
-    display_comprehensive_results(services, cost_df, complexity_score, complexity_details, 
-                                 risk_factors, strategy, migration_costs, ai_analyses, 
-                                 servers, data_size_tb, migration_timeline, num_pl_sql_objects,
-                                 pricing_data)
+    st.success("✅ Enhanced Analysis Complete! Check the Results Dashboard and Reports tabs.")
 
-# Main Application
+# Main Application with Reports Tab
 def main():
+    """Enhanced main function with dedicated Reports tab"""
     services = initialize_services()
     
     # Enterprise Header with Status
@@ -1875,126 +1836,704 @@ def main():
     # Service Status Dashboard
     display_service_status(services)
     
-    # Configuration Section
-    st.markdown('<div class="config-section">', unsafe_allow_html=True)
-    st.markdown('<div class="config-header">📊 Migration Configuration</div>', unsafe_allow_html=True)
-    
-    # Layout in tabs for better organization
-    config_tab1, config_tab2, config_tab3, config_tab4 = st.tabs([
-        "🏢 Environment Setup", "💰 Cost Parameters", "🔧 Technical Specs", "🤖 Advanced Options"
+    # Main tabs including Reports
+    main_tab1, main_tab2, main_tab3 = st.tabs([
+        "🔧 Configuration & Analysis", 
+        "📊 Results Dashboard", 
+        "📋 Reports & Export"
     ])
     
-    with config_tab1:
-        st.markdown("### Environment Configuration")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            num_environments = st.number_input("Number of Environments", 1, 10, 5)
-            data_size_tb = st.number_input("Total Data Size (TB)", 1, 1000, 25)
-        
-        with col2:
-            migration_timeline = st.slider("Migration Timeline (Months)", 3, 24, 8)
-            aws_region = st.selectbox("Target AWS Region", 
-                                    ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
-                                    index=0)
-        
-        st.markdown("### Environment Details")
-        servers = {}
-        default_envs = ['Development', 'QA', 'UAT', 'Pre-Production', 'Production']
-        
-        env_cols = st.columns(min(3, num_environments))
-        for i in range(num_environments):
-            with env_cols[i % 3]:
-                with st.expander(f"📍 {default_envs[i] if i < len(default_envs) else f'Environment {i+1}'}", expanded=True):
-                    env_name = st.text_input(f"Environment Name", 
-                                           value=default_envs[i] if i < len(default_envs) else f"Env{i+1}",
-                                           key=f"env_name_{i}")
-                    
-                    cpu = st.number_input(f"CPU Cores", 1, 128, 
-                                        [2, 4, 8, 16, 32][min(i, 4)], key=f"cpu_{i}")
-                    ram = st.number_input(f"RAM (GB)", 4, 1024, 
-                                        [8, 16, 32, 64, 128][min(i, 4)], key=f"ram_{i}")
-                    storage = st.number_input(f"Storage (GB)", 10, 10000, 
-                                            [100, 200, 500, 1000, 2000][min(i, 4)], key=f"storage_{i}")
-                    throughput = st.number_input(f"IOPS", 100, 100000, 
-                                               [1000, 2000, 5000, 10000, 20000][min(i, 4)], key=f"throughput_{i}")
-                    daily_usage = st.slider(f"Daily Usage (Hours)", 1, 24, 
-                                          [8, 12, 16, 20, 24][min(i, 4)], key=f"usage_{i}")
-                    
-                    servers[env_name] = {
-                        'cpu': cpu, 'ram': ram, 'storage': storage,
-                        'throughput': throughput, 'daily_usage': daily_usage
-                    }
+    # Initialize session state
+    if 'analysis_results' not in st.session_state:
+        st.session_state.analysis_results = None
     
-    with config_tab2:
-        st.markdown("### Cost Parameters")
+    with main_tab1:
+        # Configuration Section
+        st.markdown('<div class="config-section">', unsafe_allow_html=True)
+        st.markdown('<div class="config-header">📊 Migration Configuration</div>', unsafe_allow_html=True)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### Current Oracle Costs")
-            oracle_license_cost = st.number_input("Oracle License Cost ($/year)", 0, 5000000, 150000)
-            manpower_cost = st.number_input("Maintenance & Support ($/year)", 0, 2000000, 200000)
-            oracle_infrastructure = st.number_input("Oracle Infrastructure ($/year)", 0, 1000000, 100000)
+        # Configuration tabs
+        config_tab1, config_tab2, config_tab3, config_tab4 = st.tabs([
+            "🏢 Environment Setup", "💰 Cost Parameters", "🔧 Technical Specs", "🤖 Advanced Options"
+        ])
         
-        with col2:
-            st.markdown("#### Migration Investment")
-            migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 500000)
-            contingency_percent = st.slider("Contingency Buffer (%)", 10, 50, 20)
-            training_budget = st.number_input("Training Budget ($)", 0, 200000, 50000)
-    
-    with config_tab3:
-        st.markdown("### Technical Specifications")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### Application Architecture")
-            num_pl_sql_objects = st.number_input("PL/SQL Objects Count", 0, 50000, 800)
-            num_applications = st.number_input("Connected Applications", 1, 100, 5)
-            integration_endpoints = st.number_input("API/Integration Endpoints", 0, 500, 25)
-        
-        with col2:
-            st.markdown("#### Operational Requirements")
-            backup_retention = st.selectbox("Backup Retention (Days)", [7, 14, 30, 90, 365], index=2)
-            high_availability = st.selectbox("High Availability", ["Standard", "Multi-AZ", "Multi-Region"], index=1)
-            compliance_requirements = st.multiselect("Compliance Requirements", 
-                                                    ["SOX", "HIPAA", "PCI-DSS", "GDPR", "ISO-27001"], 
-                                                    default=["SOX"])
-    
-    with config_tab4:
-        st.markdown("### Advanced Options")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("#### AI Analysis")
-            enable_ai = st.checkbox("Enable AI-Powered Analysis", True)
-            if enable_ai and ANTHROPIC_AVAILABLE and 'anthropic_api_key' not in st.session_state:
-                api_key = st.text_input("Anthropic API Key", type="password", 
-                                       help="Get your API key from console.anthropic.com")
-                if api_key:
-                    st.session_state.anthropic_api_key = api_key
-                    # Reinitialize AI service with new key
-                    services['ai'] = EnterpriseAIService()
-        
-        with col2:
-            st.markdown("#### AWS Integration")
-            use_real_pricing = st.checkbox("Fetch Real-time AWS Pricing", value=AWS_API_AVAILABLE)
-            if use_real_pricing and not AWS_API_AVAILABLE:
-                st.warning("AWS SDK not available. Install boto3 and configure credentials.")
+        with config_tab1:
+            st.markdown("### Environment Configuration")
             
-            optimization_level = st.selectbox("Cost Optimization Level", 
-                                            ["Conservative", "Balanced", "Aggressive"], index=1)
+            col1, col2 = st.columns(2)
+            with col1:
+                num_environments = st.number_input("Number of Environments", 1, 10, 5)
+                data_size_tb = st.number_input("Total Data Size (TB)", 1, 1000, 25)
+            
+            with col2:
+                migration_timeline = st.slider("Migration Timeline (Months)", 3, 24, 8)
+                aws_region = st.selectbox("Target AWS Region", 
+                                        ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
+                                        index=0)
+            
+            # Enhanced Data Transfer Options
+            st.markdown("### 🌐 Data Transfer Strategy")
+            col1, col2 = st.columns(2)
+            with col1:
+                use_direct_connect = st.checkbox("Use AWS Direct Connect", value=True)
+                bandwidth_option = st.selectbox("Bandwidth Option", 
+                                               ["1 Gbps", "10 Gbps", "100 Gbps"], 
+                                               index=1)
+            with col2:
+                consider_snowball = st.checkbox("Consider AWS Snowball for Large Datasets", value=data_size_tb > 50)
+                parallel_transfers = st.checkbox("Enable Parallel Transfer Streams", value=True)
+            
+            bandwidth_gbps = int(bandwidth_option.split()[0])
+            
+            st.info(f"""
+            **📡 Data Transfer Configuration:**
+            - **Method:** {'AWS Direct Connect' if use_direct_connect else 'Internet Transfer'}
+            - **Bandwidth:** {bandwidth_gbps} Gbps
+            - **Estimated Transfer Time:** {(data_size_tb * 1000 * 8) / (bandwidth_gbps * 1000 * 3600 * 24):.1f} days
+            - **Snowball Option:** {'Recommended' if consider_snowball else 'Not selected'}
+            """)
+            
+            # Environment Details
+            st.markdown("### Environment Details")
+            servers = {}
+            default_envs = ['Development', 'QA', 'UAT', 'Pre-Production', 'Production']
+            
+            env_cols = st.columns(min(3, num_environments))
+            for i in range(num_environments):
+                with env_cols[i % 3]:
+                    with st.expander(f"📍 {default_envs[i] if i < len(default_envs) else f'Environment {i+1}'}", expanded=True):
+                        env_name = st.text_input(f"Environment Name", 
+                                               value=default_envs[i] if i < len(default_envs) else f"Env{i+1}",
+                                               key=f"env_name_{i}")
+                        
+                        cpu = st.number_input(f"CPU Cores", 1, 128, 
+                                            [2, 4, 8, 16, 32][min(i, 4)], key=f"cpu_{i}")
+                        ram = st.number_input(f"RAM (GB)", 4, 1024, 
+                                            [8, 16, 32, 64, 128][min(i, 4)], key=f"ram_{i}")
+                        storage = st.number_input(f"Storage (GB)", 10, 10000, 
+                                                [100, 200, 500, 1000, 2000][min(i, 4)], key=f"storage_{i}")
+                        throughput = st.number_input(f"IOPS", 100, 100000, 
+                                                   [1000, 2000, 5000, 10000, 20000][min(i, 4)], key=f"throughput_{i}")
+                        daily_usage = st.slider(f"Daily Usage (Hours)", 1, 24, 
+                                              [8, 12, 16, 20, 24][min(i, 4)], key=f"usage_{i}")
+                        
+                        servers[env_name] = {
+                            'cpu': cpu, 'ram': ram, 'storage': storage,
+                            'throughput': throughput, 'daily_usage': daily_usage
+                        }
+        
+        with config_tab2:
+            st.markdown("### Cost Parameters")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### Current Oracle Costs")
+                oracle_license_cost = st.number_input("Oracle License Cost ($/year)", 0, 5000000, 150000)
+                manpower_cost = st.number_input("Maintenance & Support ($/year)", 0, 2000000, 200000)
+                oracle_infrastructure = st.number_input("Oracle Infrastructure ($/year)", 0, 1000000, 100000)
+            
+            with col2:
+                st.markdown("#### Migration Investment")
+                migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 500000)
+                contingency_percent = st.slider("Contingency Buffer (%)", 10, 50, 20)
+                training_budget = st.number_input("Training Budget ($)", 0, 200000, 50000)
+        
+        with config_tab3:
+            st.markdown("### Technical Specifications")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### Application Architecture")
+                num_pl_sql_objects = st.number_input("PL/SQL Objects Count", 0, 50000, 800)
+                num_applications = st.number_input("Connected Applications", 1, 100, 5)
+                integration_endpoints = st.number_input("API/Integration Endpoints", 0, 500, 25)
+            
+            with col2:
+                st.markdown("#### Operational Requirements")
+                backup_retention = st.selectbox("Backup Retention (Days)", [7, 14, 30, 90, 365], index=2)
+                high_availability = st.selectbox("High Availability", ["Standard", "Multi-AZ", "Multi-Region"], index=1)
+                compliance_requirements = st.multiselect("Compliance Requirements", 
+                                                        ["SOX", "HIPAA", "PCI-DSS", "GDPR", "ISO-27001"], 
+                                                        default=["SOX"])
+        
+        with config_tab4:
+            st.markdown("### Advanced Options")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### AI Analysis")
+                enable_ai = st.checkbox("Enable AI-Powered Analysis", True)
+                if enable_ai and ANTHROPIC_AVAILABLE and 'anthropic_api_key' not in st.session_state:
+                    api_key = st.text_input("Anthropic API Key", type="password", 
+                                           help="Get your API key from console.anthropic.com")
+                    if api_key:
+                        st.session_state.anthropic_api_key = api_key
+                        # Reinitialize AI service with new key
+                        services['ai'] = EnterpriseAIService()
+            
+            with col2:
+                st.markdown("#### AWS Integration")
+                use_real_pricing = st.checkbox("Fetch Real-time AWS Pricing", value=AWS_API_AVAILABLE)
+                if use_real_pricing and not AWS_API_AVAILABLE:
+                    st.warning("AWS SDK not available. Install boto3 and configure credentials.")
+                
+                optimization_level = st.selectbox("Cost Optimization Level", 
+                                                ["Conservative", "Balanced", "Aggressive"], index=1)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Analysis Button
+        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🚀 Generate Enhanced Analysis", type="primary", use_container_width=True):
+                analyze_migration(services, servers, oracle_license_cost, manpower_cost, data_size_tb, 
+                                migration_timeline, num_pl_sql_objects, num_applications, enable_ai,
+                                migration_budget, training_budget, contingency_percent, aws_region,
+                                use_direct_connect, bandwidth_gbps)
     
-    st.markdown('</div>', unsafe_allow_html=True)
+    with main_tab2:
+        st.markdown("## 📊 Enhanced Migration Analysis Results")
+        
+        if st.session_state.analysis_results:
+            results = st.session_state.analysis_results
+            
+            # Enhanced Results Dashboard
+            cost_df = results['cost_df']
+            complexity_score = results['complexity_score']
+            enhanced_migration_costs = results['enhanced_migration_costs']
+            
+            # Executive Summary Metrics
+            total_current_cost = cost_df['Current_Total'].sum()
+            total_aws_cost = cost_df['AWS_Total_Cost'].sum()
+            total_annual_savings = cost_df['Annual_Savings'].sum()
+            three_year_savings = total_annual_savings * 3
+            roi_percentage = (three_year_savings - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100 if enhanced_migration_costs['total_migration_cost'] > 0 else 0
+            
+            # Executive Dashboard
+            st.markdown("### 📊 Executive Dashboard")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric(
+                    "Total Migration Cost",
+                    f"${enhanced_migration_costs['total_migration_cost']:,.0f}",
+                    f"Timeline: {results['migration_timeline']} months"
+                )
+            with col2:
+                st.metric(
+                    "Data Transfer Cost",
+                    f"${enhanced_migration_costs['recommended_transfer_cost']:,.0f}",
+                    f"Bandwidth: {results['bandwidth_gbps']} Gbps"
+                )
+            with col3:
+                st.metric(
+                    "Estimated Transfer Time",
+                    f"{enhanced_migration_costs['estimated_transfer_days']:.1f} days",
+                    f"Method: {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}"
+                )
+            with col4:
+                st.metric(
+                    "Annual Savings",
+                    f"${total_annual_savings:,.0f}",
+                    f"ROI: {roi_percentage:.1f}%"
+                )
+            
+            # Data Transfer Options Comparison
+            st.markdown("### 🌐 Data Transfer Options Analysis")
+            
+            transfer_options = enhanced_migration_costs['data_transfer_breakdown']['all_options']
+            recommended_key = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option_key']
+            
+            # Create comparison table
+            comparison_data = []
+            for option_key, option in transfer_options.items():
+                is_recommended = option_key == recommended_key
+                comparison_data.append({
+                    'Method': f"{'✅ ' if is_recommended else ''}{option['method']}",
+                    'Bandwidth': option.get('bandwidth', 'N/A'),
+                    'Transfer Time (Days)': f"{option['transfer_time_days']:.1f}",
+                    'Total Cost': f"${option['total_cost']:,.0f}",
+                    'Suitability': option['suitability'],
+                    'Score': option.get('recommendation_score', 'N/A')
+                })
+            
+            comparison_df = pd.DataFrame(comparison_data)
+            st.dataframe(comparison_df, use_container_width=True)
+            
+            # Create transfer options visualization
+            if results.get('analytics'):
+                transfer_chart = results['analytics'].create_transfer_comparison_chart(transfer_options)
+                st.plotly_chart(transfer_chart, use_container_width=True)
+            
+            # Enhanced Cost Breakdown
+            st.markdown("### 💰 Enhanced Migration Cost Breakdown")
+            
+            cost_breakdown = {
+                'Component': [
+                    'Migration Team',
+                    'Data Transfer (Recommended)',
+                    'AWS DMS Service',
+                    'AWS DataSync',
+                    'Network Infrastructure',
+                    'Temporary Storage',
+                    'Backup Storage',
+                    'Tools & Licensing',
+                    'Training & Certification',
+                    'AWS Professional Services',
+                    'Testing & Validation',
+                    'Contingency (15%)',
+                    'Total Investment'
+                ],
+                'Cost': [
+                    f"${enhanced_migration_costs['migration_team_cost']:,.0f}",
+                    f"${enhanced_migration_costs['recommended_transfer_cost']:,.0f}",
+                    f"${enhanced_migration_costs['dms_cost']:,.0f}",
+                    f"${enhanced_migration_costs['datasync_cost']:,.0f}",
+                    f"${enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost']:,.0f}",
+                    f"${enhanced_migration_costs['temp_storage_cost']:,.0f}",
+                    f"${enhanced_migration_costs['backup_storage_cost']:,.0f}",
+                    f"${enhanced_migration_costs['tool_costs']:,.0f}",
+                    f"${enhanced_migration_costs['training_costs']:,.0f}",
+                    f"${enhanced_migration_costs['aws_professional_services']:,.0f}",
+                    f"${enhanced_migration_costs['testing_costs']:,.0f}",
+                    f"${enhanced_migration_costs['contingency_cost']:,.0f}",
+                    f"${enhanced_migration_costs['total_migration_cost']:,.0f}"
+                ],
+                'Details': [
+                    f"Project team for {results['migration_timeline']} months",
+                    f"{enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}",
+                    f"{enhanced_migration_costs['dms_instance_type']} for {enhanced_migration_costs['dms_duration_hours']:.0f} hours",
+                    "Ongoing synchronization during migration",
+                    f"Network setup and {results['migration_timeline']} months monitoring",
+                    f"Staging storage for {results['data_size_tb']} TB",
+                    f"Backup storage during migration period",
+                    "Enterprise migration tools and licenses",
+                    "Team training and AWS certifications",
+                    "AWS expert consulting services",
+                    "Comprehensive testing and validation",
+                    "Risk mitigation buffer",
+                    "Complete migration investment"
+                ]
+            }
+            
+            breakdown_df = pd.DataFrame(cost_breakdown)
+            st.dataframe(breakdown_df, use_container_width=True)
+            
+            # Cost comparison chart
+            st.markdown("### 📊 Cost Comparison by Environment")
+            environments = cost_df['Environment']
+            current_costs = cost_df['Current_Total']
+            aws_costs = cost_df['AWS_Total_Cost']
+            
+            cost_comparison_fig = go.Figure()
+            
+            cost_comparison_fig.add_trace(go.Bar(
+                name='Current Oracle Costs',
+                x=environments,
+                y=current_costs,
+                marker_color='#FF6B6B',
+                text=[f'${cost:,.0f}' for cost in current_costs],
+                textposition='auto'
+            ))
+            
+            cost_comparison_fig.add_trace(go.Bar(
+                name='Projected AWS Costs',
+                x=environments,
+                y=aws_costs,
+                marker_color='#4ECDC4',
+                text=[f'${cost:,.0f}' for cost in aws_costs],
+                textposition='auto'
+            ))
+            
+            cost_comparison_fig.update_layout(
+                title='Annual Cost Comparison by Environment',
+                xaxis_title='Environment',
+                yaxis_title='Annual Cost ($)',
+                barmode='group',
+                height=500
+            )
+            
+            st.plotly_chart(cost_comparison_fig, use_container_width=True)
+            
+            # Data Transfer Deep Dive
+            st.markdown("### 🌐 Data Transfer Deep Dive")
+            
+            transfer_analysis = enhanced_migration_costs['data_transfer_breakdown']
+            recommended = transfer_analysis['recommended']['option']
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### Recommended Solution")
+                st.success(f"**{recommended['method']}**")
+                st.info(f"""
+                **Configuration:**
+                - Bandwidth: {recommended.get('bandwidth', 'N/A')}
+                - Transfer Time: {recommended['transfer_time_days']:.1f} days
+                - Total Cost: ${recommended['total_cost']:,.0f}
+                
+                **Why Recommended:**
+                - {recommended['suitability']}
+                - {', '.join(recommended['pros'][:2])}
+                """)
+            
+            with col2:
+                st.markdown("#### AWS Services Breakdown")
+                
+                aws_services_data = {
+                    'Service': ['DMS Instance', 'DataSync', 'Network Setup', 'Monitoring'],
+                    'Cost': [
+                        f"${enhanced_migration_costs['dms_cost']:,.0f}",
+                        f"${enhanced_migration_costs['datasync_cost']:,.0f}",
+                        f"${enhanced_migration_costs['network_setup_cost']:,.0f}",
+                        f"${enhanced_migration_costs['network_monitoring_cost']:,.0f}"
+                    ],
+                    'Purpose': [
+                        f"Database migration ({enhanced_migration_costs['dms_instance_type']})",
+                        "Ongoing synchronization",
+                        "Infrastructure setup",
+                        f"Monitoring for {results['migration_timeline']} months"
+                    ]
+                }
+                
+                aws_services_df = pd.DataFrame(aws_services_data)
+                st.dataframe(aws_services_df, use_container_width=True)
+            
+            # Enhanced info box for data transfer
+            st.info(f"""
+            **📡 Data Transfer Summary:**
+            
+            • **Volume:** {results['data_size_tb']} TB ({results['data_size_tb'] * 1000:,.0f} GB)
+            • **Method:** {recommended['method']}
+            • **Bandwidth:** {results['bandwidth_gbps']} Gbps
+            • **Transfer Time:** {enhanced_migration_costs['estimated_transfer_days']:.1f} days
+            • **Total Cost:** ${enhanced_migration_costs['recommended_transfer_cost']:,.0f}
+            • **DMS Duration:** {enhanced_migration_costs['dms_duration_hours']:.0f} hours
+            • **Instance Type:** {enhanced_migration_costs['dms_instance_type']}
+            """)
+            
+            # Risk Assessment
+            if results['risk_factors']:
+                st.markdown("### 🎯 Risk Assessment")
+                for i, risk in enumerate(results['risk_factors']):
+                    risk_level = "high" if i < 2 else "medium" if i < 4 else "low"
+                    st.markdown(f"""
+                    <div class="metric-card risk-{risk_level}">
+                        <strong>Risk {i+1}:</strong> {risk}
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # AI Analysis Display
+            if results.get('ai_analyses'):
+                st.markdown("### 🤖 AI Analysis Insights")
+                
+                for analysis_type, content in results['ai_analyses'].items():
+                    with st.expander(f"{analysis_type.replace('_', ' ').title()}", expanded=False):
+                        st.markdown(content)
+        
+        else:
+            st.info("👆 Please run the analysis in the Configuration & Analysis tab first.")
     
-    # Analysis Button
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🚀 Generate Comprehensive Analysis", type="primary", use_container_width=True):
-            analyze_migration(services, servers, oracle_license_cost, manpower_cost, data_size_tb, 
-                            migration_timeline, num_pl_sql_objects, num_applications, enable_ai,
-                            migration_budget, training_budget, contingency_percent, aws_region)
+    with main_tab3:
+        st.markdown("## 📋 Comprehensive Reports & Export")
+        
+        if st.session_state.analysis_results:
+            results = st.session_state.analysis_results
+            enhanced_migration_costs = results['enhanced_migration_costs']
+            cost_df = results['cost_df']
+            
+            # Report Generation Options
+            st.markdown("### 📄 Available Reports")
+            
+            report_col1, report_col2, report_col3 = st.columns(3)
+            
+            with report_col1:
+                st.markdown("#### Executive Summary")
+                
+                total_current_cost = cost_df['Current_Total'].sum()
+                total_aws_cost = cost_df['AWS_Total_Cost'].sum()
+                total_annual_savings = cost_df['Annual_Savings'].sum()
+                
+                executive_summary = f"""
+**Oracle to MongoDB Migration Analysis**
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+EXECUTIVE SUMMARY
+================
+Migration Investment: ${enhanced_migration_costs['total_migration_cost']:,.0f}
+Data Volume: {results['data_size_tb']} TB
+Timeline: {results['migration_timeline']} months
+Annual Savings: ${total_annual_savings:,.0f}
+
+DATA TRANSFER STRATEGY
+=====================
+Recommended Method: {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
+Transfer Time: {enhanced_migration_costs['estimated_transfer_days']:.1f} days
+Bandwidth: {results['bandwidth_gbps']} Gbps
+Transfer Cost: ${enhanced_migration_costs['recommended_transfer_cost']:,.0f}
+
+AWS SERVICES
+============
+DMS Instance: {enhanced_migration_costs['dms_instance_type']}
+DMS Duration: {enhanced_migration_costs['dms_duration_hours']:.0f} hours
+DMS Cost: ${enhanced_migration_costs['dms_cost']:,.0f}
+DataSync Cost: ${enhanced_migration_costs['datasync_cost']:,.0f}
+
+KEY RECOMMENDATIONS
+==================
+• Implement {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
+• Use {enhanced_migration_costs['dms_instance_type']} for DMS
+• Budget ${enhanced_migration_costs['total_migration_cost']:,.0f} for complete migration
+• Plan for {enhanced_migration_costs['estimated_transfer_days']:.1f} days data transfer
+                """
+                
+                st.download_button(
+                    "📊 Executive Summary",
+                    executive_summary,
+                    file_name=f"executive_summary_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            with report_col2:
+                st.markdown("#### Technical Deep Dive")
+                
+                # Generate comprehensive technical report
+                technical_report = generate_text_report(
+                    total_current_cost, total_aws_cost, total_annual_savings,
+                    ((total_annual_savings * 3 - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100),
+                    results['migration_timeline'], results['complexity_score'],
+                    enhanced_migration_costs, results['strategy'], results['servers'], 
+                    results['risk_factors'], results['data_size_tb']
+                )
+                
+                st.download_button(
+                    "🔧 Technical Report",
+                    technical_report,
+                    file_name=f"technical_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            with report_col3:
+                st.markdown("#### Configuration Export")
+                
+                # Comprehensive configuration export
+                config_export = {
+                    'metadata': {
+                        'generated': datetime.now().isoformat(),
+                        'version': '2.0',
+                        'analysis_type': 'Enhanced Oracle to MongoDB Migration'
+                    },
+                    'configuration': {
+                        'data_size_tb': results['data_size_tb'],
+                        'migration_timeline_months': results['migration_timeline'],
+                        'use_direct_connect': results['use_direct_connect'],
+                        'bandwidth_gbps': results['bandwidth_gbps'],
+                        'environments': results['servers']
+                    },
+                    'migration_analysis': {
+                        'total_cost': enhanced_migration_costs['total_migration_cost'],
+                        'transfer_analysis': enhanced_migration_costs['data_transfer_breakdown'],
+                        'recommended_method': enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method'],
+                        'transfer_time_days': enhanced_migration_costs['estimated_transfer_days'],
+                        'complexity_score': results['complexity_score']
+                    },
+                    'aws_services': {
+                        'dms_instance': enhanced_migration_costs['dms_instance_type'],
+                        'dms_duration_hours': enhanced_migration_costs['dms_duration_hours'],
+                        'dms_cost': enhanced_migration_costs['dms_cost'],
+                        'datasync_cost': enhanced_migration_costs['datasync_cost']
+                    },
+                    'cost_analysis': cost_df.to_dict('records')
+                }
+                
+                config_json = json.dumps(config_export, indent=2, default=str)
+                
+                st.download_button(
+                    "⚙️ Full Configuration",
+                    config_json,
+                    file_name=f"migration_config_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+            
+            # Enhanced transfer analysis section
+            st.markdown("### 🌐 Data Transfer Detailed Analysis")
+            
+            transfer_options = enhanced_migration_costs['data_transfer_breakdown']['all_options']
+            
+            # Create detailed comparison cards
+            for option_key, option in transfer_options.items():
+                is_recommended = option_key == enhanced_migration_costs['data_transfer_breakdown']['recommended']['option_key']
+                card_class = "recommended-option" if is_recommended else "transfer-option-card"
+                
+                st.markdown(f"""
+                <div class="transfer-option-card {card_class}">
+                    <h4>{'🏆 ' if is_recommended else ''}
+                    {option['method']} {'(Recommended)' if is_recommended else ''}</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0;">
+                        <div><strong>Bandwidth:</strong> {option.get('bandwidth', 'N/A')}</div>
+                        <div><strong>Transfer Time:</strong> {option['transfer_time_days']:.1f} days</div>
+                        <div><strong>Total Cost:</strong> ${option['total_cost']:,.0f}</div>
+                        <div><strong>Suitability:</strong> {option['suitability']}</div>
+                    </div>
+                    <div style="margin: 1rem 0;">
+                        <strong>Pros:</strong> {', '.join(option['pros'])}
+                    </div>
+                    <div>
+                        <strong>Cons:</strong> {', '.join(option['cons'])}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Cost breakdown visualization
+            st.markdown("### 💰 Migration Cost Visualization")
+            
+            # Create pie chart for migration costs
+            cost_components = {
+                'Migration Team': enhanced_migration_costs['migration_team_cost'],
+                'Data Transfer': enhanced_migration_costs['recommended_transfer_cost'],
+                'AWS Services': enhanced_migration_costs['dms_cost'] + enhanced_migration_costs['datasync_cost'],
+                'Infrastructure': enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost'],
+                'Storage': enhanced_migration_costs['temp_storage_cost'] + enhanced_migration_costs['backup_storage_cost'],
+                'Tools & Training': enhanced_migration_costs['tool_costs'] + enhanced_migration_costs['training_costs'],
+                'Professional Services': enhanced_migration_costs['aws_professional_services'],
+                'Testing': enhanced_migration_costs['testing_costs'],
+                'Contingency': enhanced_migration_costs['contingency_cost']
+            }
+            
+            cost_pie_fig = go.Figure(data=[go.Pie(
+                labels=list(cost_components.keys()),
+                values=list(cost_components.values()),
+                hole=0.3,
+                textinfo='label+percent',
+                texttemplate='%{label}<br>%{percent}',
+                marker=dict(colors=px.colors.qualitative.Set3)
+            )])
+            
+            cost_pie_fig.update_layout(
+                title="Migration Cost Breakdown",
+                height=600,
+                annotations=[dict(text=f'Total<br>${enhanced_migration_costs["total_migration_cost"]:,.0f}', 
+                                x=0.5, y=0.5, font_size=16, showarrow=False)]
+            )
+            
+            st.plotly_chart(cost_pie_fig, use_container_width=True)
+            
+            # Timeline visualization
+            st.markdown("### 📅 Migration Timeline")
+            
+            timeline_phases = [
+                {'Phase': 'Planning & Assessment', 'Start': 0, 'Duration': 4, 'Color': '#FF9999'},
+                {'Phase': 'Infrastructure Setup', 'Start': 3, 'Duration': 6, 'Color': '#66B2FF'},
+                {'Phase': 'Data Migration', 'Start': 8, 'Duration': enhanced_migration_costs['estimated_transfer_days']/7, 'Color': '#99FF99'},
+                {'Phase': 'Testing & Validation', 'Start': 8 + enhanced_migration_costs['estimated_transfer_days']/7, 'Duration': 4, 'Color': '#FFCC99'},
+                {'Phase': 'Go-Live & Support', 'Start': results['migration_timeline'] - 2, 'Duration': 3, 'Color': '#FF99CC'}
+            ]
+            
+            timeline_fig = go.Figure()
+            
+            for phase in timeline_phases:
+                timeline_fig.add_trace(go.Bar(
+                    x=[phase['Duration']],
+                    y=[phase['Phase']],
+                    orientation='h',
+                    name=phase['Phase'],
+                    marker=dict(color=phase['Color']),
+                    text=f"{phase['Duration']:.1f} weeks",
+                    textposition='inside',
+                    base=phase['Start']
+                ))
+            
+            timeline_fig.update_layout(
+                title='Migration Timeline Overview',
+                xaxis_title='Weeks',
+                yaxis_title='Migration Phases',
+                height=400,
+                showlegend=False,
+                xaxis=dict(range=[0, results['migration_timeline'] + 2])
+            )
+            
+            st.plotly_chart(timeline_fig, use_container_width=True)
+            
+            # CSV export for detailed data
+            st.markdown("### 📊 Detailed Data Export")
+            
+            csv_col1, csv_col2 = st.columns(2)
+            
+            with csv_col1:
+                # Cost analysis CSV
+                csv_data = cost_df.to_csv(index=False)
+                st.download_button(
+                    "📊 Cost Analysis (CSV)",
+                    csv_data,
+                    file_name=f"cost_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            with csv_col2:
+                # Transfer options CSV
+                transfer_df = pd.DataFrame([
+                    {
+                        'Method': option['method'],
+                        'Bandwidth': option.get('bandwidth', 'N/A'),
+                        'Transfer_Time_Days': option['transfer_time_days'],
+                        'Total_Cost': option['total_cost'],
+                        'Suitability': option['suitability'],
+                        'Recommendation_Score': option.get('recommendation_score', 'N/A')
+                    }
+                    for option in transfer_options.values()
+                ])
+                
+                transfer_csv = transfer_df.to_csv(index=False)
+                st.download_button(
+                    "🌐 Transfer Options (CSV)",
+                    transfer_csv,
+                    file_name=f"transfer_options_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+        
+        else:
+            st.info("👆 Please run the analysis first to generate reports.")
+            
+            # Show sample report templates
+            st.markdown("### 📋 Available Report Templates")
+            
+            sample_col1, sample_col2, sample_col3 = st.columns(3)
+            
+            with sample_col1:
+                st.markdown("""
+                #### Executive Summary Template
+                - Migration overview and ROI
+                - Data transfer strategy
+                - Cost-benefit analysis  
+                - Timeline and milestones
+                - Key recommendations
+                """)
+            
+            with sample_col2:
+                st.markdown("""
+                #### Technical Deep Dive
+                - Infrastructure analysis
+                - Enhanced data transfer options
+                - AWS services configuration
+                - DMS and DataSync setup
+                - Performance projections
+                """)
+            
+            with sample_col3:
+                st.markdown("""
+                #### Implementation Plan
+                - Detailed timeline with transfer phases
+                - Resource requirements
+                - Risk mitigation strategies
+                - AWS services checklist
+                - Go-live procedures
+                """)
 
 if __name__ == "__main__":
     main()
