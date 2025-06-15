@@ -1922,7 +1922,7 @@ def process_environment_file(df):
 
 # REPLACE the existing main() function completely with this:
 
-ddef main():
+def main():
     """Enhanced main function with dedicated Analysis tab"""
     services = initialize_services()
     
