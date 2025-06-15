@@ -145,13 +145,14 @@ def get_claude_analysis(prompt: str, analysis_type: str = "general") -> str:
         return get_fallback_analysis(analysis_type)
     
     try:
+        # Updated model name to current version
         api_key = st.secrets.get('ANTHROPIC_API_KEY') or st.session_state.get('anthropic_api_key')
         if not api_key:
             return get_fallback_analysis(analysis_type)
         
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-3-sonnet-20240229",
+            model="claude-3-5-sonnet-20241022",  # Updated model name
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -261,7 +262,19 @@ def get_fallback_analysis(analysis_type: str) -> str:
 
 def analyze_complexity(servers, data_size_tb, num_pl_sql_objects=0, num_applications=1):
     """Analyze migration complexity"""
-    prod_specs = servers.get('Prod', servers.get('Production', list(servers.values())[-1]))
+    # Get production specs safely
+    prod_specs = None
+    for env_name in ['Prod', 'Production', 'PROD']:
+        if env_name in servers:
+            prod_specs = servers[env_name]
+            break
+    
+    if not prod_specs and servers:
+        # Use the last server if no production found
+        prod_specs = list(servers.values())[-1]
+    elif not prod_specs:
+        # Default specs if no servers
+        prod_specs = {'cpu': 4, 'ram': 16, 'storage': 500, 'throughput': 5000}
     
     # Calculate complexity factors (0-100 scale)
     cpu_complexity = min(100, prod_specs['cpu'] * 3)
@@ -360,7 +373,7 @@ def recommend_instances(servers):
 def calculate_costs(servers, pricing_data, oracle_license, manpower, data_size_tb, recommendations):
     """Calculate comprehensive cost analysis"""
     cost_data = []
-    total_envs = len(servers)
+    total_envs = len(servers) if servers else 1
     
     for env, specs in servers.items():
         # Current Oracle costs (distributed across environments)
@@ -401,7 +414,7 @@ def calculate_costs(servers, pricing_data, oracle_license, manpower, data_size_t
         
         total_aws_cost = ec2_annual_cost + ebs_annual_cost + mongodb_annual_cost + network_cost + backup_cost
         
-        # Calculate savings
+        # Calculate savings (avoid division by zero)
         total_savings = current_total_cost - total_aws_cost
         savings_percentage = (total_savings / current_total_cost * 100) if current_total_cost > 0 else 0
         
@@ -529,23 +542,29 @@ def main():
             
             for i in range(num_environments):
                 env_name = st.text_input(f"Environment {i+1} Name", 
-                                       default_envs[i] if i < len(default_envs) else f"Env{i+1}")
+                                       value=default_envs[i] if i < len(default_envs) else f"Env{i+1}",
+                                       key=f"env_name_{i}")
                 
                 col1, col2 = st.columns(2)
                 with col1:
                     cpu = st.number_input(f"CPU Cores ({env_name})", 1, 128, 
-                                        [2, 4, 8, 16, 32][min(i, 4)])
+                                        [2, 4, 8, 16, 32][min(i, 4)],
+                                        key=f"cpu_{i}")
                     ram = st.number_input(f"RAM (GB) ({env_name})", 4, 1024, 
-                                        [8, 16, 32, 64, 128][min(i, 4)])
+                                        [8, 16, 32, 64, 128][min(i, 4)],
+                                        key=f"ram_{i}")
                 
                 with col2:
                     storage = st.number_input(f"Storage (GB) ({env_name})", 10, 10000, 
-                                            [100, 200, 500, 1000, 2000][min(i, 4)])
+                                            [100, 200, 500, 1000, 2000][min(i, 4)],
+                                            key=f"storage_{i}")
                     throughput = st.number_input(f"Throughput (IOPS) ({env_name})", 100, 100000, 
-                                               [1000, 2000, 5000, 10000, 20000][min(i, 4)])
+                                               [1000, 2000, 5000, 10000, 20000][min(i, 4)],
+                                               key=f"throughput_{i}")
                 
                 daily_usage = st.slider(f"Daily Usage Hours ({env_name})", 1, 24, 
-                                      [8, 12, 16, 20, 24][min(i, 4)])
+                                      [8, 12, 16, 20, 24][min(i, 4)],
+                                      key=f"usage_{i}")
                 
                 servers[env_name] = {
                     'cpu': cpu, 'ram': ram, 'storage': storage,
@@ -764,6 +783,7 @@ def main():
         
         with col2:
             st.subheader("ROI Analysis")
+            # Fixed division by zero issue
             payback_months = migration_costs['total_migration_cost'] / (total_annual_savings / 12) if total_annual_savings > 0 else float('inf')
             three_year_roi = (total_annual_savings * 3 - migration_costs['total_migration_cost']) / migration_costs['total_migration_cost'] * 100 if migration_costs['total_migration_cost'] > 0 else 0
             
@@ -771,42 +791,46 @@ def main():
             st.metric("3-Year ROI", f"{three_year_roi:.1f}%")
             st.metric("Break-even", "Yes" if payback_months <= 36 else "No")
         
-        # ROI Timeline Chart
+        # ROI Timeline Chart - Fixed calculation logic
         roi_years = []
         cumulative_savings = []
-        cumulative_investment = migration_costs['total_migration_cost']
         
         for year in range(1, 4):
+            # Calculate annual savings with improvement
             annual_savings = total_annual_savings * (1 + 0.05 * (year - 1))  # 5% improvement per year
-            if year == 1:
-                net_savings = annual_savings - migration_costs['total_migration_cost']
-            else:
-                net_savings = annual_savings
             
-            cumulative_savings.append(sum([total_annual_savings * (1 + 0.05 * (y - 1)) for y in range(1, year + 1)]) - migration_costs['total_migration_cost'])
+            # Calculate cumulative savings
+            if year == 1:
+                cumulative = annual_savings - migration_costs['total_migration_cost']
+            else:
+                prev_cumulative = cumulative_savings[-1] if cumulative_savings else 0
+                cumulative = prev_cumulative + annual_savings
+            
+            cumulative_savings.append(cumulative)
             roi_years.append(f"Year {year}")
         
-        fig_roi = go.Figure()
-        fig_roi.add_trace(go.Scatter(
-            x=roi_years,
-            y=cumulative_savings,
-            mode='lines+markers',
-            name='Cumulative Savings',
-            line=dict(color='#2E8B57', width=3),
-            marker=dict(size=8)
-        ))
-        
-        fig_roi.add_hline(y=0, line_dash="dash", line_color="red", 
-                         annotation_text="Break-even Point")
-        
-        fig_roi.update_layout(
-            title='3-Year ROI Timeline',
-            xaxis_title='Timeline',
-            yaxis_title='Cumulative Savings ($)',
-            height=400
-        )
-        
-        st.plotly_chart(fig_roi, use_container_width=True)
+        if roi_years and cumulative_savings:  # Only create chart if we have data
+            fig_roi = go.Figure()
+            fig_roi.add_trace(go.Scatter(
+                x=roi_years,
+                y=cumulative_savings,
+                mode='lines+markers',
+                name='Cumulative Savings',
+                line=dict(color='#2E8B57', width=3),
+                marker=dict(size=8)
+            ))
+            
+            fig_roi.add_hline(y=0, line_dash="dash", line_color="red", 
+                             annotation_text="Break-even Point")
+            
+            fig_roi.update_layout(
+                title='3-Year ROI Timeline',
+                xaxis_title='Timeline',
+                yaxis_title='Cumulative Savings ($)',
+                height=400
+            )
+            
+            st.plotly_chart(fig_roi, use_container_width=True)
         
         # Instance Recommendations
         st.header("💻 Infrastructure Recommendations")
@@ -856,7 +880,8 @@ def main():
             title='Complexity Factors Breakdown',
             xaxis_title='Factors',
             yaxis_title='Complexity Score (0-100)',
-            height=400
+            height=400,
+            xaxis_tickangle=-45  # Rotate labels for better readability
         )
         
         st.plotly_chart(complexity_fig, use_container_width=True)
@@ -912,7 +937,8 @@ def main():
             )
         
         with col3:
-            # Summary report
+            # Summary report - Fixed potential division by zero
+            savings_pct = (total_annual_savings/total_current_cost*100) if total_current_cost > 0 else 0
             summary_report = f"""
 Oracle to MongoDB Migration Analysis Summary
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -922,7 +948,7 @@ EXECUTIVE SUMMARY
 Current Annual Cost: ${total_current_cost:,.0f}
 Projected AWS Cost: ${total_aws_cost:,.0f}
 Annual Savings: ${total_annual_savings:,.0f}
-Savings Percentage: {(total_annual_savings/total_current_cost*100):.1f}%
+Savings Percentage: {savings_pct:.1f}%
 
 COMPLEXITY ANALYSIS
 ===================
