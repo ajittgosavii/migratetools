@@ -2149,7 +2149,8 @@ def main():
     elif page == "📊 Enhanced Results":
         st.markdown("## 📊 Comprehensive Migration Analysis Results")
         display_enhanced_results_updated(st.session_state.analysis_results)  # <-- CHANGED FROM display_enhanced_results
-
-# 7. AT THE VERY END OF YOUR FILE, ENSURE THE MAIN FUNCTION CALL IS:
+        
+        
 if __name__ == "__main__":
     main()
+    
