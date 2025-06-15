@@ -193,6 +193,537 @@ def handle_bulk_upload():
     st.markdown('</div>', unsafe_allow_html=True)
     return None
 
+# MISSING FUNCTIONS TO ADD TO YOUR streamlit_app.py
+# Add these functions BEFORE the main() function
+
+def create_detailed_migration_timeline(params, complexity_score):
+    """Create detailed migration timeline with phases and milestones"""
+    
+    timeline_months = params['migration_timeline']
+    strategy = get_enhanced_migration_strategy(complexity_score, params)
+    num_phases = strategy['recommended_phases']
+    
+    # Base phase templates
+    base_phases = [
+        {
+            'name': 'Assessment & Planning',
+            'duration_ratio': 0.15,
+            'key_activities': [
+                'Current state analysis',
+                'Migration strategy finalization',
+                'Team formation and training',
+                'Tool selection and setup'
+            ],
+            'deliverables': [
+                'Migration plan document',
+                'Risk assessment',
+                'Resource allocation plan',
+                'Timeline and milestones'
+            ]
+        },
+        {
+            'name': 'Environment Setup',
+            'duration_ratio': 0.20,
+            'key_activities': [
+                'AWS infrastructure provisioning',
+                'MongoDB Atlas cluster setup',
+                'Network configuration',
+                'Security implementation'
+            ],
+            'deliverables': [
+                'Development environment',
+                'Testing environment',
+                'Security baseline',
+                'Monitoring setup'
+            ]
+        },
+        {
+            'name': 'Data Migration Design',
+            'duration_ratio': 0.15,
+            'key_activities': [
+                'Schema design and mapping',
+                'Data transformation rules',
+                'Migration scripts development',
+                'Validation procedures'
+            ],
+            'deliverables': [
+                'Target schema design',
+                'Data mapping document',
+                'Migration scripts',
+                'Validation framework'
+            ]
+        },
+        {
+            'name': 'Application Refactoring',
+            'duration_ratio': 0.25,
+            'key_activities': [
+                'PL/SQL analysis and conversion',
+                'Application layer updates',
+                'Integration development',
+                'Performance optimization'
+            ],
+            'deliverables': [
+                'Refactored applications',
+                'Updated integrations',
+                'Performance benchmarks',
+                'Code review reports'
+            ]
+        },
+        {
+            'name': 'Testing & Validation',
+            'duration_ratio': 0.15,
+            'key_activities': [
+                'Unit and integration testing',
+                'Performance testing',
+                'User acceptance testing',
+                'Data validation'
+            ],
+            'deliverables': [
+                'Test execution reports',
+                'Performance validation',
+                'UAT sign-off',
+                'Data integrity confirmation'
+            ]
+        },
+        {
+            'name': 'Go-Live & Optimization',
+            'duration_ratio': 0.10,
+            'key_activities': [
+                'Production migration',
+                'Cutover execution',
+                'Post-migration monitoring',
+                'Performance tuning'
+            ],
+            'deliverables': [
+                'Production system',
+                'Cutover report',
+                'Monitoring dashboards',
+                'Optimization recommendations'
+            ]
+        }
+    ]
+    
+    # Select phases based on complexity
+    selected_phases = base_phases[:num_phases]
+    
+    # Calculate phase durations
+    timeline_phases = []
+    start_date = datetime.now()
+    
+    for i, phase in enumerate(selected_phases):
+        duration_weeks = int(timeline_months * 4.33 * phase['duration_ratio'])
+        phase_start = start_date + timedelta(weeks=sum([p['duration_weeks'] for p in timeline_phases]))
+        phase_end = phase_start + timedelta(weeks=duration_weeks)
+        
+        timeline_phases.append({
+            'phase_number': i + 1,
+            'name': phase['name'],
+            'duration_weeks': duration_weeks,
+            'duration_months': round(duration_weeks / 4.33, 1),
+            'start_date': phase_start,
+            'end_date': phase_end,
+            'key_activities': phase['key_activities'],
+            'deliverables': phase['deliverables'],
+            'critical_path': i in [1, 3, 4]  # Environment setup, refactoring, testing are critical
+        })
+    
+    return {
+        'total_duration_months': timeline_months,
+        'total_duration_weeks': sum([p['duration_weeks'] for p in timeline_phases]),
+        'phases': timeline_phases,
+        'critical_milestones': [
+            {'name': 'Environment Ready', 'week': timeline_phases[1]['duration_weeks']},
+            {'name': 'Data Migration Complete', 'week': sum([p['duration_weeks'] for p in timeline_phases[:3]])},
+            {'name': 'Testing Complete', 'week': sum([p['duration_weeks'] for p in timeline_phases[:5]])},
+            {'name': 'Go-Live', 'week': sum([p['duration_weeks'] for p in timeline_phases])}
+        ]
+    }
+
+def get_enhanced_migration_strategy(complexity_score, params):
+    """Get enhanced migration strategy with detailed recommendations"""
+    
+    if complexity_score < 25:
+        strategy = {
+            'name': 'Lift and Shift Plus',
+            'approach': 'Direct migration with cloud optimization',
+            'timeline': '3-5 months',
+            'risk_level': 'Low',
+            'effort_level': 'Low to Medium',
+            'recommended_phases': 3,
+            'key_benefits': [
+                'Fastest time to market',
+                'Minimal application changes',
+                'Lower migration costs',
+                'Quick ROI realization'
+            ],
+            'key_activities': [
+                'Direct database migration using AWS DMS',
+                'Minimal application refactoring',
+                'Infrastructure optimization',
+                'Performance tuning'
+            ]
+        }
+    elif complexity_score < 50:
+        strategy = {
+            'name': 'Re-platform with Modernization',
+            'approach': 'Migration with selective modernization',
+            'timeline': '5-8 months',
+            'risk_level': 'Medium',
+            'effort_level': 'Medium',
+            'recommended_phases': 4,
+            'key_benefits': [
+                'Balanced approach to modernization',
+                'Improved performance and scalability',
+                'Moderate timeline and cost',
+                'Foundation for future enhancements'
+            ],
+            'key_activities': [
+                'Selective PL/SQL refactoring',
+                'Application layer modernization',
+                'Database schema optimization',
+                'Cloud-native service integration'
+            ]
+        }
+    elif complexity_score < 75:
+        strategy = {
+            'name': 'Re-architect for Cloud',
+            'approach': 'Comprehensive redesign for cloud-native architecture',
+            'timeline': '8-14 months',
+            'risk_level': 'Medium-High',
+            'effort_level': 'High',
+            'recommended_phases': 5,
+            'key_benefits': [
+                'Full cloud-native capabilities',
+                'Maximum scalability and performance',
+                'Long-term architectural benefits',
+                'Modern development practices'
+            ],
+            'key_activities': [
+                'Complete application redesign',
+                'Microservices architecture adoption',
+                'Advanced MongoDB features utilization',
+                'DevOps and automation implementation'
+            ]
+        }
+    else:
+        strategy = {
+            'name': 'Hybrid Transformation',
+            'approach': 'Phased transformation with parallel systems',
+            'timeline': '12-20 months',
+            'risk_level': 'High',
+            'effort_level': 'Very High',
+            'recommended_phases': 6,
+            'key_benefits': [
+                'Minimized business disruption',
+                'Gradual risk mitigation',
+                'Comprehensive modernization',
+                'Future-proof architecture'
+            ],
+            'key_activities': [
+                'Parallel system development',
+                'Gradual data migration',
+                'Complete application transformation',
+                'Advanced cloud services adoption'
+            ]
+        }
+    
+    return strategy
+
+def calculate_risk_assessment(servers, params, complexity_analysis):
+    """Calculate comprehensive risk assessment"""
+    
+    risks = []
+    
+    # Technical risks
+    if complexity_analysis['factors']['PL_SQL_Complexity'] > 60:
+        risks.append({
+            'category': 'Technical',
+            'risk': 'PL/SQL Conversion Complexity',
+            'probability': 'High' if complexity_analysis['factors']['PL_SQL_Complexity'] > 80 else 'Medium',
+            'impact': 'High',
+            'mitigation': 'Detailed code analysis, automated conversion tools, expert consultation',
+            'owner': 'Technical Team Lead'
+        })
+    
+    if params['data_size_tb'] > 50:
+        risks.append({
+            'category': 'Technical',
+            'risk': 'Data Migration Performance',
+            'probability': 'Medium',
+            'impact': 'High',
+            'mitigation': 'Parallel data streams, incremental migration, performance testing',
+            'owner': 'Database Administrator'
+        })
+    
+    # Timeline risks
+    if params['migration_timeline'] < 6:
+        risks.append({
+            'category': 'Timeline',
+            'risk': 'Aggressive Timeline',
+            'probability': 'High',
+            'impact': 'Medium',
+            'mitigation': 'Resource augmentation, parallel work streams, scope prioritization',
+            'owner': 'Project Manager'
+        })
+    
+    # Business risks
+    if len(servers) > 3:
+        risks.append({
+            'category': 'Business',
+            'risk': 'Multi-Environment Coordination',
+            'probability': 'Medium',
+            'impact': 'Medium',
+            'mitigation': 'Detailed coordination plan, environment-specific teams, clear communication',
+            'owner': 'Program Manager'
+        })
+    
+    if params['num_applications'] > 5:
+        risks.append({
+            'category': 'Business',
+            'risk': 'Application Integration Complexity',
+            'probability': 'Medium',
+            'impact': 'High',
+            'mitigation': 'Integration testing, API compatibility checks, rollback procedures',
+            'owner': 'Integration Team Lead'
+        })
+    
+    # Financial risks
+    total_investment = 500000  # Placeholder for migration cost
+    if total_investment > params['migration_budget']:
+        risks.append({
+            'category': 'Financial',
+            'risk': 'Budget Overrun',
+            'probability': 'Medium',
+            'impact': 'High',
+            'mitigation': 'Regular budget reviews, contingency planning, scope management',
+            'owner': 'Financial Controller'
+        })
+    
+    return {
+        'total_risks': len(risks),
+        'high_probability_risks': len([r for r in risks if r['probability'] == 'High']),
+        'high_impact_risks': len([r for r in risks if r['impact'] == 'High']),
+        'risk_details': risks,
+        'overall_risk_level': calculate_overall_risk_level(risks)
+    }
+
+def calculate_overall_risk_level(risks):
+    """Calculate overall risk level"""
+    if not risks:
+        return {'level': 'Low', 'color': '#38a169'}
+    
+    high_risks = len([r for r in risks if r['probability'] == 'High' and r['impact'] == 'High'])
+    medium_risks = len([r for r in risks if (r['probability'] == 'High' and r['impact'] == 'Medium') or 
+                                          (r['probability'] == 'Medium' and r['impact'] == 'High')])
+    
+    if high_risks > 2:
+        return {'level': 'Very High', 'color': '#9f1239'}
+    elif high_risks > 0 or medium_risks > 3:
+        return {'level': 'High', 'color': '#e53e3e'}
+    elif medium_risks > 0:
+        return {'level': 'Medium', 'color': '#d69e2e'}
+    else:
+        return {'level': 'Low', 'color': '#38a169'}
+
+# ALSO ADD THESE FUNCTIONS IF THEY'RE MISSING:
+
+def create_migration_timeline_gantt(results):
+    """Create detailed migration timeline Gantt chart"""
+    st.markdown("## 📅 Migration Timeline & Gantt Chart")
+    
+    timeline = results['migration_timeline']
+    
+    # Prepare Gantt chart data
+    gantt_data = []
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    
+    for i, phase in enumerate(timeline['phases']):
+        gantt_data.append(dict(
+            Task=phase['name'],
+            Start=phase['start_date'],
+            Finish=phase['end_date'],
+            Resource=f"Phase {phase['phase_number']}",
+            Description=f"{phase['duration_weeks']} weeks"
+        ))
+    
+    # Create Gantt chart
+    try:
+        fig_gantt = ff.create_gantt(
+            gantt_data,
+            colors=colors[:len(timeline['phases'])],
+            index_col='Resource',
+            title='Migration Timeline - Gantt Chart',
+            show_colorbar=True,
+            bar_width=0.5,
+            showgrid_x=True,
+            showgrid_y=True
+        )
+        
+        fig_gantt.update_layout(height=400)
+        st.plotly_chart(fig_gantt, use_container_width=True)
+    except Exception as e:
+        st.error(f"Gantt chart creation failed: {e}")
+        st.info("Displaying timeline as table instead:")
+        
+        # Fallback to table display
+        timeline_data = []
+        for phase in timeline['phases']:
+            timeline_data.append({
+                'Phase': f"{phase['phase_number']}. {phase['name']}",
+                'Duration': f"{phase['duration_weeks']} weeks",
+                'Start Date': phase['start_date'].strftime('%Y-%m-%d'),
+                'End Date': phase['end_date'].strftime('%Y-%m-%d'),
+                'Key Activities': ', '.join(phase['key_activities'][:3])
+            })
+        
+        st.dataframe(pd.DataFrame(timeline_data), use_container_width=True)
+    
+    # Timeline details
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📋 Phase Details")
+        for phase in timeline['phases']:
+            critical_indicator = "🔴" if phase.get('critical_path', False) else "🟢"
+            st.markdown(f"""
+            <div class="timeline-item">
+                <div class="timeline-phase">{critical_indicator} Phase {phase['phase_number']}: {phase['name']}</div>
+                <div class="timeline-duration">Duration: {phase['duration_weeks']} weeks ({phase['duration_months']} months)</div>
+                <div class="timeline-tasks">
+                    <strong>Key Activities:</strong><br>
+                    {'<br>'.join(['• ' + activity for activity in phase['key_activities'][:3]])}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("### 🎯 Critical Milestones")
+        for milestone in timeline['critical_milestones']:
+            st.markdown(f"""
+            <div class="timeline-item">
+                <div class="timeline-phase">📌 {milestone['name']}</div>
+                <div class="timeline-duration">Week {milestone['week']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+def create_waterfall_chart(results):
+    """Create waterfall chart showing cost transformation"""
+    st.markdown("## 💧 Cost Transformation Waterfall Chart")
+    
+    cost_analysis = results['cost_analysis']
+    
+    # Waterfall data
+    categories = ['Current Oracle Cost', 'Oracle License Savings', 'Infrastructure Savings', 
+                 'Maintenance Savings', 'AWS Infrastructure', 'AWS MongoDB', 'AWS Storage',
+                 'AWS Security & Monitoring', 'Net Annual Savings']
+    
+    # Calculate values
+    current_cost = cost_analysis['total_current_cost']
+    aws_cost = cost_analysis['total_aws_cost']
+    
+    # Break down current costs (estimated)
+    license_cost = current_cost * 0.4
+    infrastructure_cost = current_cost * 0.35
+    maintenance_cost = current_cost * 0.25
+    
+    # Break down AWS costs (estimated)
+    aws_infrastructure = aws_cost * 0.4
+    aws_mongodb = aws_cost * 0.35
+    aws_storage = aws_cost * 0.15
+    aws_security = aws_cost * 0.1
+    
+    values = [current_cost, -license_cost, -infrastructure_cost, -maintenance_cost,
+             aws_infrastructure, aws_mongodb, aws_storage, aws_security, 
+             cost_analysis['total_annual_savings']]
+    
+    # Create waterfall chart
+    fig_waterfall = go.Figure()
+    
+    # Calculate cumulative values for positioning
+    cumulative = [current_cost]
+    for i in range(1, len(values)-1):
+        cumulative.append(cumulative[-1] + values[i])
+    cumulative.append(cost_analysis['total_annual_savings'])
+    
+    # Add bars
+    colors = ['blue', 'red', 'red', 'red', 'orange', 'orange', 'orange', 'orange', 'green']
+    
+    for i, (category, value, color) in enumerate(zip(categories, values, colors)):
+        if i == 0:  # Starting value
+            fig_waterfall.add_trace(go.Bar(
+                x=[category], y=[value], name=category,
+                marker_color=color, text=f'${value:,.0f}', textposition='auto'
+            ))
+        elif i == len(categories) - 1:  # Final value
+            fig_waterfall.add_trace(go.Bar(
+                x=[category], y=[value], name=category,
+                marker_color=color, text=f'${value:,.0f}', textposition='auto'
+            ))
+        else:  # Intermediate values
+            if value < 0:  # Savings
+                fig_waterfall.add_trace(go.Bar(
+                    x=[category], y=[abs(value)], base=[cumulative[i-1] + value],
+                    name=category, marker_color=color,
+                    text=f'${abs(value):,.0f}', textposition='auto'
+                ))
+            else:  # Costs
+                fig_waterfall.add_trace(go.Bar(
+                    x=[category], y=[value], base=[cumulative[i-1]],
+                    name=category, marker_color=color,
+                    text=f'${value:,.0f}', textposition='auto'
+                ))
+    
+    fig_waterfall.update_layout(
+        title='Annual Cost Transformation Waterfall',
+        xaxis_title='Cost Components',
+        yaxis_title='Annual Cost ($)',
+        showlegend=False,
+        height=500,
+        xaxis_tickangle=-45
+    )
+    
+    st.plotly_chart(fig_waterfall, use_container_width=True)
+    
+    # ROI projection over time
+    st.markdown("### 📈 ROI Projection Over Time")
+    
+    years = list(range(1, 6))  # 5 year projection
+    annual_savings = cost_analysis['total_annual_savings']
+    migration_cost = cost_analysis['migration_costs']['total']
+    
+    cumulative_savings = [annual_savings * year for year in years]
+    cumulative_investment = [migration_cost] * 5  # One-time investment
+    net_benefit = [savings - migration_cost for savings in cumulative_savings]
+    
+    fig_roi = go.Figure()
+    
+    fig_roi.add_trace(go.Scatter(
+        x=years, y=cumulative_savings, mode='lines+markers',
+        name='Cumulative Savings', line=dict(color='green', width=3)
+    ))
+    
+    fig_roi.add_trace(go.Scatter(
+        x=years, y=cumulative_investment, mode='lines+markers',
+        name='Migration Investment', line=dict(color='red', width=3, dash='dash')
+    ))
+    
+    fig_roi.add_trace(go.Scatter(
+        x=years, y=net_benefit, mode='lines+markers',
+        name='Net Benefit', line=dict(color='blue', width=3),
+        fill='tonexty', fillcolor='rgba(0,100,255,0.1)'
+    ))
+    
+    fig_roi.update_layout(
+        title='5-Year ROI Projection',
+        xaxis_title='Years',
+        yaxis_title='Amount ($)',
+        height=400,
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig_roi, use_container_width=True)
+
+
 def process_environment_file(df):
     """Process uploaded environment configuration file"""
     try:
