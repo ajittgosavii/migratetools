@@ -2459,6 +2459,70 @@ def create_risk_assessment_heatmap(results):
         
         st.plotly_chart(fig_env_risk, use_container_width=True)
 
+def create_environment_heatmap(results):
+    """Create heatmap showing environment resource utilization and complexity"""
+    st.markdown("## 🔥 Environment Analysis Heatmap")
+    
+    # Prepare data
+    env_data = []
+    for env, specs in results['servers'].items():
+        env_data.append({
+            'Environment': env,
+            'CPU': specs['cpu'],
+            'RAM': specs['ram'],
+            'Storage': specs['storage'],
+            'Throughput': specs['throughput'],
+            'Daily Usage': specs['daily_usage']
+        })
+    
+    df = pd.DataFrame(env_data).set_index('Environment')
+    
+    # Create heatmap
+    fig = go.Figure(data=go.Heatmap(
+        z=df.values,
+        x=df.columns,
+        y=df.index,
+        colorscale='Viridis',
+        text=df.values,
+        texttemplate="%{text}",
+        textfont={"size": 12}
+    ))
+    
+    fig.update_layout(
+        title='Environment Resource Utilization',
+        xaxis_title="Resource Type",
+        yaxis_title="Environment",
+        height=500
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Add complexity indicators
+    st.markdown("### 📈 Complexity Indicators")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Total Environments", len(df))
+    
+    with col2:
+        total_cpu = df['CPU'].sum()
+        st.metric("Total CPU Cores", total_cpu)
+    
+    with col3:
+        total_storage = df['Storage'].sum()
+        st.metric("Total Storage (GB)", total_storage)
+    
+    # Resource distribution
+    st.markdown("### 📊 Resource Distribution")
+    fig2 = make_subplots(rows=1, cols=3, subplot_titles=("CPU Distribution", "RAM Distribution", "Storage Distribution"))
+    
+    fig2.add_trace(go.Bar(x=df.index, y=df['CPU'], name='CPU'), row=1, col=1)
+    fig2.add_trace(go.Bar(x=df.index, y=df['RAM'], name='RAM'), row=1, col=2)
+    fig2.add_trace(go.Bar(x=df.index, y=df['Storage'], name='Storage'), row=1, col=3)
+    
+    fig2.update_layout(height=400, showlegend=False)
+    st.plotly_chart(fig2, use_container_width=True)
+
 def create_migration_strategy_dashboard(results):
     """Create comprehensive migration strategy dashboard"""
     st.markdown("## 🎯 Optimal Migration Strategy Dashboard")
