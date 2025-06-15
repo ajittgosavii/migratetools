@@ -435,7 +435,7 @@ def calculate_risk_assessment(servers, params, complexity_analysis):
     risks = []
     
     # Technical risks
-    if complexity_analysis['factors']['PL_SQL_Complexity'] > 60:
+    if complexity_analysis['factors']['PL/SQL Complexity'] > 60:
         risks.append({
             'category': 'Technical',
             'risk': 'PL/SQL Conversion Complexity',
@@ -1389,7 +1389,7 @@ def calculate_complexity_analysis(servers, params):
     
     # Risk factors
     risk_factors = []
-    if factors['PL/SQL Complexity'] > 60:
+    if complexity_analysis['factors']['PL/SQL Complexity'] > 60:
         risk_factors.append("High PL/SQL complexity requires extensive refactoring")
     if factors['Data Volume'] > 70:
         risk_factors.append("Large data volume may require extended migration timeline")
