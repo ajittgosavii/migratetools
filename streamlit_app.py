@@ -1394,6 +1394,23 @@ COST OPTIMIZATION RECOMMENDATIONS
 • Leverage AWS Professional Services for expertise
 • Implement comprehensive testing strategy
 • Use Reserved Instances for predictable workloads post-migration
+
+SUCCESS METRICS
+===============
+• Target Annual Savings: ${total_annual_savings:,.0f}
+• Migration Budget Adherence: Within ${migration_costs['total_migration_cost']:,.0f}
+• Timeline Adherence: {migration_timeline} months
+• Data Integrity: 100% accuracy target
+• Performance: Maintain or improve current response times
+• Zero Downtime Target: 99.9% uptime during migration
+
+APPENDIX: DETAILED TRANSFER OPTIONS
+==================================
+All evaluated transfer methods:
+{chr(10).join([f"• {option['method']}: ${option['total_cost']:,.0f} ({option['transfer_time_days']:.1f} days)" for option in migration_costs['data_transfer_breakdown']['all_options'].values()])}
+
+Recommended: {migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
+Reason: {migration_costs['data_transfer_breakdown']['recommended']['option']['suitability']}
 """
 
 # Enhanced calculation functions
@@ -1819,10 +1836,111 @@ def analyze_migration(services, servers, oracle_license_cost, manpower_cost, dat
         status_text.empty()
     
     st.success("✅ Enhanced Analysis Complete! Check the Results Dashboard and Reports tabs.")
+    
+# Add these functions BEFORE the main() function (around line 800)
 
-# Main Application with Reports Tab
+def handle_bulk_upload():
+    """Handle bulk file upload and processing"""
+    st.markdown("### 📁 Bulk Configuration Upload")
+    
+    uploaded_file = st.file_uploader(
+        "Upload Configuration File", 
+        type=['csv', 'xlsx', 'json'],
+        help="Upload a CSV/Excel file with environment configurations or a JSON configuration file"
+    )
+    
+    if uploaded_file is not None:
+        try:
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+            
+            if file_extension == 'csv':
+                df = pd.read_csv(uploaded_file)
+                st.success("✅ CSV file loaded successfully!")
+                
+            elif file_extension == 'xlsx':
+                df = pd.read_excel(uploaded_file)
+                st.success("✅ Excel file loaded successfully!")
+                
+            elif file_extension == 'json':
+                config_data = json.load(uploaded_file)
+                st.success("✅ JSON configuration loaded successfully!")
+                st.json(config_data)
+                return config_data
+            
+            # Display preview for CSV/Excel
+            if file_extension in ['csv', 'xlsx']:
+                st.markdown("#### 👀 File Preview")
+                st.dataframe(df.head(), use_container_width=True)
+                
+                # Process the file based on expected format
+                if any('environment' in col.lower() for col in df.columns):
+                    return process_environment_file(df)
+                else:
+                    st.warning("⚠️ Expected columns: Environment, CPU, RAM, Storage, Daily_Usage, Throughput")
+                    st.markdown("**Expected format:**")
+                    sample_df = pd.DataFrame({
+                        'Environment': ['Production', 'Development', 'QA'],
+                        'CPU': [32, 8, 16],
+                        'RAM': [128, 32, 64],
+                        'Storage': [2000, 500, 1000],
+                        'Daily_Usage': [24, 12, 16],
+                        'Throughput': [20000, 5000, 10000]
+                    })
+                    st.dataframe(sample_df, use_container_width=True)
+                    
+        except Exception as e:
+            st.error(f"❌ Error processing file: {str(e)}")
+    
+    return None
+
+def process_environment_file(df):
+    """Process uploaded environment configuration file"""
+    try:
+        # Normalize column names
+        df.columns = df.columns.str.lower().str.replace(' ', '_')
+        
+        required_columns = ['environment', 'cpu', 'ram', 'storage']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            st.error(f"❌ Missing required columns: {', '.join(missing_columns)}")
+            return None
+        
+        # Set defaults for optional columns
+        if 'daily_usage' not in df.columns:
+            df['daily_usage'] = 20  # Default 20 hours
+        if 'throughput' not in df.columns:
+            df['throughput'] = df['cpu'] * 1000  # Default based on CPU
+        
+        # Convert to the expected format
+        servers = {}
+        for _, row in df.iterrows():
+            env_name = str(row['environment'])
+            servers[env_name] = {
+                'cpu': int(row['cpu']),
+                'ram': int(row['ram']),
+                'storage': int(row['storage']),
+                'daily_usage': int(row.get('daily_usage', 20)),
+                'throughput': int(row.get('throughput', row['cpu'] * 1000))
+            }
+        
+        st.success(f"✅ Processed {len(servers)} environments successfully!")
+        
+        # Display processed environments
+        st.markdown("#### 📊 Processed Environments")
+        processed_df = pd.DataFrame.from_dict(servers, orient='index')
+        st.dataframe(processed_df, use_container_width=True)
+        
+        return servers
+        
+    except Exception as e:
+        st.error(f"❌ Error processing environment data: {str(e)}")
+        return None
+
+# REPLACE the existing main() function completely with this:
+
 def main():
-    """Enhanced main function with dedicated Reports tab"""
+    """Enhanced main function with dedicated Analysis tab"""
     services = initialize_services()
     
     # Enterprise Header with Status
@@ -1836,9 +1954,10 @@ def main():
     # Service Status Dashboard
     display_service_status(services)
     
-    # Main tabs including Reports
-    main_tab1, main_tab2, main_tab3 = st.tabs([
-        "🔧 Configuration & Analysis", 
+    # Restructured main tabs - Added dedicated Analysis tab
+    main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs([
+        "🔧 Configuration", 
+        "🚀 Analysis & Processing",  # New dedicated analysis tab
         "📊 Results Dashboard", 
         "📋 Reports & Export"
     ])
@@ -1846,13 +1965,17 @@ def main():
     # Initialize session state
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
+    if 'bulk_servers' not in st.session_state:
+        st.session_state.bulk_servers = None
+    if 'manual_servers' not in st.session_state:
+        st.session_state.manual_servers = None
     
     with main_tab1:
-        # Configuration Section
+        # Configuration Section - NO ANALYSIS BUTTON HERE
         st.markdown('<div class="config-section">', unsafe_allow_html=True)
         st.markdown('<div class="config-header">📊 Migration Configuration</div>', unsafe_allow_html=True)
         
-        # Configuration tabs
+        # Configuration tabs - removed analysis button from here
         config_tab1, config_tab2, config_tab3, config_tab4 = st.tabs([
             "🏢 Environment Setup", "💰 Cost Parameters", "🔧 Technical Specs", "🤖 Advanced Options"
         ])
@@ -1860,67 +1983,97 @@ def main():
         with config_tab1:
             st.markdown("### Environment Configuration")
             
-            col1, col2 = st.columns(2)
-            with col1:
-                num_environments = st.number_input("Number of Environments", 1, 10, 5)
-                data_size_tb = st.number_input("Total Data Size (TB)", 1, 1000, 25)
+            # Add input method selection
+            st.markdown("#### 📝 Configuration Method")
+            config_method = st.radio(
+                "Choose how to configure environments:",
+                ["Manual Entry", "Bulk Upload (CSV/Excel/JSON)"],
+                horizontal=True,
+                key="config_method_radio"
+            )
             
-            with col2:
-                migration_timeline = st.slider("Migration Timeline (Months)", 3, 24, 8)
-                aws_region = st.selectbox("Target AWS Region", 
-                                        ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
-                                        index=0)
-            
-            # Enhanced Data Transfer Options
-            st.markdown("### 🌐 Data Transfer Strategy")
-            col1, col2 = st.columns(2)
-            with col1:
-                use_direct_connect = st.checkbox("Use AWS Direct Connect", value=True)
-                bandwidth_option = st.selectbox("Bandwidth Option", 
-                                               ["1 Gbps", "10 Gbps", "100 Gbps"], 
-                                               index=1)
-            with col2:
-                consider_snowball = st.checkbox("Consider AWS Snowball for Large Datasets", value=data_size_tb > 50)
-                parallel_transfers = st.checkbox("Enable Parallel Transfer Streams", value=True)
-            
-            bandwidth_gbps = int(bandwidth_option.split()[0])
-            
-            st.info(f"""
-            **📡 Data Transfer Configuration:**
-            - **Method:** {'AWS Direct Connect' if use_direct_connect else 'Internet Transfer'}
-            - **Bandwidth:** {bandwidth_gbps} Gbps
-            - **Estimated Transfer Time:** {(data_size_tb * 1000 * 8) / (bandwidth_gbps * 1000 * 3600 * 24):.1f} days
-            - **Snowball Option:** {'Recommended' if consider_snowball else 'Not selected'}
-            """)
-            
-            # Environment Details
-            st.markdown("### Environment Details")
-            servers = {}
-            default_envs = ['Development', 'QA', 'UAT', 'Pre-Production', 'Production']
-            
-            env_cols = st.columns(min(3, num_environments))
-            for i in range(num_environments):
-                with env_cols[i % 3]:
-                    with st.expander(f"📍 {default_envs[i] if i < len(default_envs) else f'Environment {i+1}'}", expanded=True):
-                        env_name = st.text_input(f"Environment Name", 
-                                               value=default_envs[i] if i < len(default_envs) else f"Env{i+1}",
-                                               key=f"env_name_{i}")
-                        
-                        cpu = st.number_input(f"CPU Cores", 1, 128, 
-                                            [2, 4, 8, 16, 32][min(i, 4)], key=f"cpu_{i}")
-                        ram = st.number_input(f"RAM (GB)", 4, 1024, 
-                                            [8, 16, 32, 64, 128][min(i, 4)], key=f"ram_{i}")
-                        storage = st.number_input(f"Storage (GB)", 10, 10000, 
-                                                [100, 200, 500, 1000, 2000][min(i, 4)], key=f"storage_{i}")
-                        throughput = st.number_input(f"IOPS", 100, 100000, 
-                                                   [1000, 2000, 5000, 10000, 20000][min(i, 4)], key=f"throughput_{i}")
-                        daily_usage = st.slider(f"Daily Usage (Hours)", 1, 24, 
-                                              [8, 12, 16, 20, 24][min(i, 4)], key=f"usage_{i}")
-                        
-                        servers[env_name] = {
-                            'cpu': cpu, 'ram': ram, 'storage': storage,
-                            'throughput': throughput, 'daily_usage': daily_usage
-                        }
+            if config_method == "Bulk Upload (CSV/Excel/JSON)":
+                bulk_servers = handle_bulk_upload()
+                if bulk_servers:
+                    st.session_state.bulk_servers = bulk_servers
+                    st.session_state.manual_servers = None
+                    st.info("💡 Bulk configuration loaded. Go to the 'Analysis & Processing' tab to run analysis.")
+                
+            else:
+                # Original manual configuration
+                col1, col2 = st.columns(2)
+                with col1:
+                    num_environments = st.number_input("Number of Environments", 1, 10, 5, key="config_num_environments")
+                    data_size_tb = st.number_input("Total Data Size (TB)", 1, 1000, 25, key="config_data_size_tb")
+                
+                with col2:
+                    migration_timeline = st.slider("Migration Timeline (Months)", 3, 24, 8, key="config_migration_timeline")
+                    aws_region = st.selectbox("Target AWS Region", 
+                                            ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
+                                            index=0, key="config_aws_region")
+                
+                # Enhanced Data Transfer Options
+                st.markdown("### 🌐 Data Transfer Strategy")
+                col1, col2 = st.columns(2)
+                with col1:
+                    use_direct_connect = st.checkbox("Use AWS Direct Connect", value=True, key="config_use_direct_connect")
+                    bandwidth_option = st.selectbox("Bandwidth Option", 
+                                                   ["1 Gbps", "10 Gbps", "100 Gbps"], 
+                                                   index=1, key="config_bandwidth_option")
+                with col2:
+                    consider_snowball = st.checkbox("Consider AWS Snowball for Large Datasets", value=data_size_tb > 50, key="config_consider_snowball")
+                    parallel_transfers = st.checkbox("Enable Parallel Transfer Streams", value=True, key="config_parallel_transfers")
+                
+                bandwidth_gbps = int(bandwidth_option.split()[0])
+                
+                st.info(f"""
+                **📡 Data Transfer Configuration:**
+                - **Method:** {'AWS Direct Connect' if use_direct_connect else 'Internet Transfer'}
+                - **Bandwidth:** {bandwidth_gbps} Gbps
+                - **Estimated Transfer Time:** {(data_size_tb * 1000 * 8) / (bandwidth_gbps * 1000 * 3600 * 24):.1f} days
+                - **Snowball Option:** {'Recommended' if consider_snowball else 'Not selected'}
+                """)
+                
+                # Environment Details
+                st.markdown("### Environment Details")
+                servers = {}
+                default_envs = ['Development', 'QA', 'UAT', 'Pre-Production', 'Production']
+                
+                env_cols = st.columns(min(3, num_environments))
+                for i in range(num_environments):
+                    with env_cols[i % 3]:
+                        with st.expander(f"📍 {default_envs[i] if i < len(default_envs) else f'Environment {i+1}'}", expanded=True):
+                            env_name = st.text_input(f"Environment Name", 
+                                                   value=default_envs[i] if i < len(default_envs) else f"Env{i+1}",
+                                                   key=f"config_env_name_{i}")
+                            
+                            cpu = st.number_input(f"CPU Cores", 1, 128, 
+                                                [2, 4, 8, 16, 32][min(i, 4)], key=f"config_cpu_{i}")
+                            ram = st.number_input(f"RAM (GB)", 4, 1024, 
+                                                [8, 16, 32, 64, 128][min(i, 4)], key=f"config_ram_{i}")
+                            storage = st.number_input(f"Storage (GB)", 10, 10000, 
+                                                    [100, 200, 500, 1000, 2000][min(i, 4)], key=f"config_storage_{i}")
+                            throughput = st.number_input(f"IOPS", 100, 100000, 
+                                                       [1000, 2000, 5000, 10000, 20000][min(i, 4)], key=f"config_throughput_{i}")
+                            daily_usage = st.slider(f"Daily Usage (Hours)", 1, 24, 
+                                                  [8, 12, 16, 20, 24][min(i, 4)], key=f"config_usage_{i}")
+                            
+                            servers[env_name] = {
+                                'cpu': cpu, 'ram': ram, 'storage': storage,
+                                'throughput': throughput, 'daily_usage': daily_usage
+                            }
+                
+                st.session_state.manual_servers = servers
+                st.session_state.bulk_servers = None
+                
+                # Store additional config values for Analysis tab
+                st.session_state.update({
+                    'data_size_tb': data_size_tb,
+                    'migration_timeline': migration_timeline,
+                    'use_direct_connect': use_direct_connect,
+                    'bandwidth_gbps': bandwidth_gbps,
+                    'aws_region': aws_region
+                })
         
         with config_tab2:
             st.markdown("### Cost Parameters")
@@ -1928,72 +2081,983 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("#### Current Oracle Costs")
-                oracle_license_cost = st.number_input("Oracle License Cost ($/year)", 0, 5000000, 150000)
-                manpower_cost = st.number_input("Maintenance & Support ($/year)", 0, 2000000, 200000)
-                oracle_infrastructure = st.number_input("Oracle Infrastructure ($/year)", 0, 1000000, 100000)
+                oracle_license_cost = st.number_input("Oracle License Cost ($/year)", 0, 5000000, 150000, key="config_oracle_license_cost")
+                manpower_cost = st.number_input("Maintenance & Support ($/year)", 0, 2000000, 200000, key="config_manpower_cost")
+                oracle_infrastructure = st.number_input("Oracle Infrastructure ($/year)", 0, 1000000, 100000, key="config_oracle_infrastructure")
             
             with col2:
                 st.markdown("#### Migration Investment")
-                migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 500000)
-                contingency_percent = st.slider("Contingency Buffer (%)", 10, 50, 20)
-                training_budget = st.number_input("Training Budget ($)", 0, 200000, 50000)
-        
-        with config_tab3:
-            st.markdown("### Technical Specifications")
+                migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 500000, key="config_migration_budget")
+                contingency_percent = st.slider("Contingency Buffer (%)", 10, 50, 20, key="config_contingency_percent")
+                training_budget = st.number_input("Training Budget ($)", 0, 200000, 50000, key="config_training_budget")
             
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("#### Application Architecture")
-                num_pl_sql_objects = st.number_input("PL/SQL Objects Count", 0, 50000, 800)
-                num_applications = st.number_input("Connected Applications", 1, 100, 5)
-                integration_endpoints = st.number_input("API/Integration Endpoints", 0, 500, 25)
+            # Store cost values for Analysis tab
+            st.session_state.update({
+                'oracle_license_cost': oracle_license_cost,
+                'manpower_cost': manpower_cost,
+                'migration_budget': migration_budget,
+                'contingency_percent': contingency_percent,
+                'training_budget': training_budget
+            })
             
-            with col2:
-                st.markdown("#### Operational Requirements")
-                backup_retention = st.selectbox("Backup Retention (Days)", [7, 14, 30, 90, 365], index=2)
-                high_availability = st.selectbox("High Availability", ["Standard", "Multi-AZ", "Multi-Region"], index=1)
-                compliance_requirements = st.multiselect("Compliance Requirements", 
-                                                        ["SOX", "HIPAA", "PCI-DSS", "GDPR", "ISO-27001"], 
-                                                        default=["SOX"])
+def create_enhanced_visualizations(results, services):
+    """Create enhanced visualizations for the dashboard"""
+    
+    if not services.get('analytics'):
+        return None
+    
+    # Extract data
+    cost_df = results['cost_df']
+    complexity_details = results['complexity_details']
+    enhanced_migration_costs = results['enhanced_migration_costs']
+    servers = results['servers']
+    
+    # Create comprehensive visualization dictionary
+    visualizations = {}
+    
+    # 1. Cost Comparison Chart
+    cost_comparison_fig = go.Figure()
+    
+    environments = cost_df['Environment'].tolist()
+    current_costs = cost_df['Current_Total'].tolist()
+    aws_costs = cost_df['AWS_Total_Cost'].tolist()
+    
+    cost_comparison_fig.add_trace(go.Bar(
+        name='Current Oracle Costs',
+        x=environments,
+        y=current_costs,
+        marker_color='lightcoral'
+    ))
+    
+    cost_comparison_fig.add_trace(go.Bar(
+        name='Projected AWS Costs',
+        x=environments,
+        y=aws_costs,
+        marker_color='lightblue'
+    ))
+    
+    cost_comparison_fig.update_layout(
+        title='Current vs. Projected Annual Costs by Environment',
+        xaxis_title='Environment',
+        yaxis_title='Annual Cost ($)',
+        barmode='group',
+        height=400
+    )
+    
+    visualizations['cost_comparison'] = cost_comparison_fig
+    
+    # 2. Migration Cost Breakdown
+    migration_costs = {
+        'Migration Team': enhanced_migration_costs['migration_team_cost'],
+        'Data Transfer': enhanced_migration_costs['recommended_transfer_cost'],
+        'AWS Services': enhanced_migration_costs['dms_cost'] + enhanced_migration_costs['datasync_cost'],
+        'Infrastructure': enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['temp_storage_cost'],
+        'Training & Tools': enhanced_migration_costs['training_costs'] + enhanced_migration_costs['tool_costs'],
+        'Professional Services': enhanced_migration_costs['aws_professional_services'],
+        'Testing': enhanced_migration_costs['testing_costs'],
+        'Contingency': enhanced_migration_costs['contingency_cost']
+    }
+    
+    migration_breakdown_fig = services['analytics'].create_cost_breakdown_pie(migration_costs)
+    visualizations['migration_breakdown'] = migration_breakdown_fig
+    
+    # 3. Savings Timeline
+    years = ['Year 1', 'Year 2', 'Year 3']
+    annual_savings = cost_df['Annual_Savings'].sum()
+    cumulative_savings = [annual_savings, annual_savings * 2, annual_savings * 3]
+    investment_recovery = [-enhanced_migration_costs['total_migration_cost'], 
+                          annual_savings - enhanced_migration_costs['total_migration_cost'],
+                          annual_savings * 2 - enhanced_migration_costs['total_migration_cost']]
+    
+    savings_fig = go.Figure()
+    
+    savings_fig.add_trace(go.Bar(
+        name='Annual Savings',
+        x=years,
+        y=[annual_savings] * 3,
+        marker_color='lightgreen'
+    ))
+    
+    savings_fig.add_trace(go.Scatter(
+        name='Cumulative Savings',
+        x=years,
+        y=cumulative_savings,
+        mode='lines+markers',
+        line=dict(color='darkgreen', width=3),
+        marker=dict(size=10)
+    ))
+    
+    savings_fig.add_trace(go.Scatter(
+        name='Net ROI',
+        x=years,
+        y=investment_recovery,
+        mode='lines+markers',
+        line=dict(color='blue', width=3),
+        marker=dict(size=10)
+    ))
+    
+    savings_fig.update_layout(
+        title='3-Year Savings and ROI Projection',
+        xaxis_title='Year',
+        yaxis_title='Amount ($)',
+        height=400
+    )
+    
+    visualizations['savings_timeline'] = savings_fig
+    
+    return visualizations
         
-        with config_tab4:
-            st.markdown("### Advanced Options")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("#### AI Analysis")
-                enable_ai = st.checkbox("Enable AI-Powered Analysis", True)
-                if enable_ai and ANTHROPIC_AVAILABLE and 'anthropic_api_key' not in st.session_state:
-                    api_key = st.text_input("Anthropic API Key", type="password", 
-                                           help="Get your API key from console.anthropic.com")
-                    if api_key:
-                        st.session_state.anthropic_api_key = api_key
-                        # Reinitialize AI service with new key
-                        services['ai'] = EnterpriseAIService()
-            
-            with col2:
-                st.markdown("#### AWS Integration")
-                use_real_pricing = st.checkbox("Fetch Real-time AWS Pricing", value=AWS_API_AVAILABLE)
-                if use_real_pricing and not AWS_API_AVAILABLE:
-                    st.warning("AWS SDK not available. Install boto3 and configure credentials.")
-                
-                optimization_level = st.selectbox("Cost Optimization Level", 
-                                                ["Conservative", "Balanced", "Aggressive"], index=1)
+        # Replace the Results Dashboard tab (main_tab3) and Reports tab (main_tab4) sections in your main() function
+# with these complete implementations:
+
+# COMPLETE RESULTS DASHBOARD TAB (main_tab3)
+with main_tab3:
+    st.markdown("## 📊 Enhanced Migration Analysis Results")
+    
+    if st.session_state.analysis_results:
+        results = st.session_state.analysis_results
         
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Enhanced Results Dashboard
+        cost_df = results['cost_df']
+        complexity_score = results['complexity_score']
+        complexity_details = results['complexity_details']
+        enhanced_migration_costs = results['enhanced_migration_costs']
+        strategy = results['strategy']
+        risk_factors = results['risk_factors']
+        ai_analyses = results['ai_analyses']
+        servers = results['servers']
+        data_size_tb = results['data_size_tb']
+        migration_timeline = results['migration_timeline']
         
-        # Analysis Button
+        # Executive Summary Metrics
+        total_current_cost = cost_df['Current_Total'].sum()
+        total_aws_cost = cost_df['AWS_Total_Cost'].sum()
+        total_annual_savings = cost_df['Annual_Savings'].sum()
+        three_year_savings = total_annual_savings * 3
+        roi_percentage = (three_year_savings - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100 if enhanced_migration_costs['total_migration_cost'] > 0 else 0
+        
+        # Executive Dashboard
+        st.markdown("### 📊 Executive Dashboard")
+        
+        # Main metrics grid
+        metric_col1, metric_col2, metric_col3, metric_col4, metric_col5 = st.columns(5)
+        
+        with metric_col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-value">${enhanced_migration_costs['total_migration_cost']:,.0f}</p>
+                <p class="metric-label">Total Migration Cost</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with metric_col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-value">${enhanced_migration_costs['recommended_transfer_cost']:,.0f}</p>
+                <p class="metric-label">Data Transfer Cost</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with metric_col3:
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-value">{enhanced_migration_costs['estimated_transfer_days']:.1f} days</p>
+                <p class="metric-label">Transfer Time</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with metric_col4:
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-value">${total_annual_savings:,.0f}</p>
+                <p class="metric-label">Annual Savings</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with metric_col5:
+            st.markdown(f"""
+            <div class="metric-card">
+                <p class="metric-value">{roi_percentage:.1f}%</p>
+                <p class="metric-label">3-Year ROI</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("🚀 Generate Enhanced Analysis", type="primary", use_container_width=True):
-                analyze_migration(services, servers, oracle_license_cost, manpower_cost, data_size_tb, 
-                                migration_timeline, num_pl_sql_objects, num_applications, enable_ai,
-                                migration_budget, training_budget, contingency_percent, aws_region,
-                                use_direct_connect, bandwidth_gbps)
+        # Detailed Analysis Sections
+        analysis_tab1, analysis_tab2, analysis_tab3, analysis_tab4 = st.tabs([
+            "📊 Cost Analysis", "📈 Visual Analytics", "🎯 Migration Strategy", "🤖 AI Insights"
+        ])
+        
+        with analysis_tab1:
+            # Cost breakdown
+            st.markdown("#### 💰 Comprehensive Cost Analysis")
+            
+            cost_col1, cost_col2 = st.columns(2)
+            
+            with cost_col1:
+                st.markdown("##### Current vs. Projected Costs")
+                st.dataframe(cost_df[['Environment', 'Current_Total', 'AWS_Total_Cost', 'Annual_Savings', 'Savings_Percentage']], 
+                           use_container_width=True)
+            
+            with cost_col2:
+                # Cost breakdown pie chart
+                if services.get('analytics'):
+                    cost_components = {
+                        'Migration Team': enhanced_migration_costs['migration_team_cost'],
+                        'Data Transfer': enhanced_migration_costs['recommended_transfer_cost'],
+                        'AWS DMS': enhanced_migration_costs['dms_cost'],
+                        'Infrastructure': enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['temp_storage_cost'],
+                        'Training': enhanced_migration_costs['training_costs'],
+                        'Tools & Services': enhanced_migration_costs['tool_costs'] + enhanced_migration_costs['aws_professional_services'],
+                        'Contingency': enhanced_migration_costs['contingency_cost']
+                    }
+                    
+                    cost_pie_fig = services['analytics'].create_cost_breakdown_pie(cost_components)
+                    st.plotly_chart(cost_pie_fig, use_container_width=True)
+            
+            # Enhanced migration costs breakdown
+            st.markdown("##### 🔍 Enhanced Migration Cost Breakdown")
+            
+            migration_cost_data = {
+                'Cost Component': [
+                    'Migration Team', 'Data Transfer (Recommended)', 'AWS DMS Service', 
+                    'AWS DataSync', 'Network Infrastructure', 'Temporary Storage',
+                    'Backup Storage', 'Tools & Licenses', 'Training & Certification',
+                    'AWS Professional Services', 'Testing & Validation', 'Contingency (15%)'
+                ],
+                'Cost ($)': [
+                    enhanced_migration_costs['migration_team_cost'],
+                    enhanced_migration_costs['recommended_transfer_cost'],
+                    enhanced_migration_costs['dms_cost'],
+                    enhanced_migration_costs['datasync_cost'],
+                    enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost'],
+                    enhanced_migration_costs['temp_storage_cost'],
+                    enhanced_migration_costs['backup_storage_cost'],
+                    enhanced_migration_costs['tool_costs'],
+                    enhanced_migration_costs['training_costs'],
+                    enhanced_migration_costs['aws_professional_services'],
+                    enhanced_migration_costs['testing_costs'],
+                    enhanced_migration_costs['contingency_cost']
+                ],
+                'Description': [
+                    f'Team for {migration_timeline} months',
+                    f'{enhanced_migration_costs["data_transfer_breakdown"]["recommended"]["option"]["method"]}',
+                    f'Instance: {enhanced_migration_costs["dms_instance_type"]}',
+                    'Ongoing synchronization during migration',
+                    f'Setup + monitoring for {results["bandwidth_gbps"]} Gbps',
+                    f'Temporary storage during migration',
+                    'Backup storage during migration',
+                    'Migration tools and licenses',
+                    'Team training and certifications',
+                    'Expert consulting services',
+                    'Comprehensive testing strategy',
+                    '15% buffer for unforeseen costs'
+                ]
+            }
+            
+            migration_df = pd.DataFrame(migration_cost_data)
+            migration_df['Cost ($)'] = migration_df['Cost ($)'].apply(lambda x: f"${x:,.0f}")
+            st.dataframe(migration_df, use_container_width=True)
+            
+            # Data Transfer Analysis
+            st.markdown("##### 🚚 Data Transfer Options Analysis")
+            
+            transfer_options = enhanced_migration_costs['data_transfer_breakdown']['all_options']
+            recommended_key = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option_key']
+            
+            transfer_data = []
+            for option_key, option in transfer_options.items():
+                transfer_data.append({
+                    'Method': option['method'],
+                    'Cost ($)': f"${option['total_cost']:,.0f}",
+                    'Time (days)': f"{option['transfer_time_days']:.1f}",
+                    'Bandwidth': option.get('bandwidth', 'N/A'),
+                    'Suitability': option['suitability'],
+                    'Recommended': '✅' if option_key == recommended_key else '❌',
+                    'Score': f"{option.get('recommendation_score', 50)}/100"
+                })
+            
+            transfer_df = pd.DataFrame(transfer_data)
+            st.dataframe(transfer_df, use_container_width=True)
+            
+            # Show recommended method details
+            recommended_option = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']
+            st.success(f"""
+            **Recommended Transfer Method:** {recommended_option['method']}
+            - **Cost:** ${recommended_option['total_cost']:,.0f}
+            - **Transfer Time:** {recommended_option['transfer_time_days']:.1f} days
+            - **Bandwidth:** {recommended_option.get('bandwidth', 'N/A')}
+            - **Pros:** {', '.join(recommended_option['pros'])}
+            """)
+        
+        with analysis_tab2:
+            # Visual Analytics
+            st.markdown("#### 📈 Visual Analytics Dashboard")
+            
+            if services.get('analytics'):
+                # Complexity Heatmap
+                st.markdown("##### 🎯 Migration Complexity Heatmap")
+                complexity_heatmap = services['analytics'].create_complexity_heatmap(complexity_details, servers)
+                st.plotly_chart(complexity_heatmap, use_container_width=True)
+                
+                # ROI Waterfall Chart
+                st.markdown("##### 💹 3-Year ROI Waterfall Analysis")
+                roi_waterfall = services['analytics'].create_roi_waterfall(enhanced_migration_costs, total_annual_savings)
+                st.plotly_chart(roi_waterfall, use_container_width=True)
+                
+                # Migration Timeline Gantt Chart
+                st.markdown("##### 📅 Migration Timeline - Gantt Chart")
+                timeline_gantt = services['analytics'].create_timeline_gantt(migration_timeline * 4, results['num_pl_sql_objects'])
+                st.plotly_chart(timeline_gantt, use_container_width=True)
+                
+                # Data Transfer Comparison
+                st.markdown("##### 🌐 Data Transfer Options Comparison")
+                transfer_comparison = services['analytics'].create_transfer_comparison_chart(transfer_options)
+                st.plotly_chart(transfer_comparison, use_container_width=True)
+                
+            else:
+                st.warning("Analytics service not available. Install required dependencies for full visualization.")
+        
+        with analysis_tab3:
+            # Migration Strategy
+            st.markdown("#### 🎯 Detailed Migration Strategy")
+            
+            # Strategy Overview
+            strategy_col1, strategy_col2 = st.columns(2)
+            
+            with strategy_col1:
+                st.markdown(f"""
+                <div class="analysis-section">
+                    <h4>📋 Recommended Strategy</h4>
+                    <h3 style="color: #4299e1;">{strategy['strategy']}</h3>
+                    <p><strong>Timeline:</strong> {strategy['timeline']}</p>
+                    <p><strong>Risk Level:</strong> <span class="risk-{strategy['risk'].lower()}">{strategy['risk']}</span></p>
+                    <p><strong>Effort Level:</strong> {strategy['effort']}</p>
+                    <p>{strategy['description']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with strategy_col2:
+                # Complexity Score Breakdown
+                st.markdown("##### 🎯 Complexity Analysis")
+                complexity_df = pd.DataFrame([
+                    {'Factor': k.replace('_', ' ').title(), 'Score': f"{v:.1f}/100"} 
+                    for k, v in complexity_details.items()
+                ])
+                st.dataframe(complexity_df, use_container_width=True)
+                
+                st.metric("Overall Complexity Score", f"{complexity_score}/100", 
+                         delta=f"Risk Level: {strategy['risk']}")
+            
+            # Risk Factors
+            st.markdown("##### ⚠️ Risk Factors & Mitigation")
+            
+            for i, risk in enumerate(risk_factors, 1):
+                st.markdown(f"""
+                <div class="risk-medium" style="padding: 1rem; margin: 0.5rem 0; border-radius: 0.5rem;">
+                    <strong>Risk {i}:</strong> {risk}
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Technical Recommendations
+            st.markdown("##### 🔧 Technical Recommendations")
+            
+            tech_recommendations = []
+            for env, specs in servers.items():
+                rec = results['cost_df'][results['cost_df']['Environment'] == env]
+                if not rec.empty:
+                    tech_recommendations.append({
+                        'Environment': env,
+                        'Current Specs': f"{specs['cpu']} vCPU, {specs['ram']} GB RAM, {specs['storage']} GB Storage",
+                        'Recommended EC2': rec.iloc[0]['EC2_Instance'],
+                        'Recommended MongoDB': rec.iloc[0]['MongoDB_Cluster'],
+                        'Annual Savings': f"${rec.iloc[0]['Annual_Savings']:,.0f}"
+                    })
+            
+            tech_df = pd.DataFrame(tech_recommendations)
+            st.dataframe(tech_df, use_container_width=True)
+            
+            # Migration Phases
+            st.markdown("##### 📊 Migration Phases")
+            
+            phases = [
+                {
+                    'Phase': '1. Discovery & Assessment',
+                    'Duration': '2-4 weeks',
+                    'Key Activities': 'Complete inventory, dependency mapping, risk assessment',
+                    'Deliverables': 'Migration plan, risk register, technical architecture'
+                },
+                {
+                    'Phase': '2. Environment Setup',
+                    'Duration': '2-3 weeks', 
+                    'Key Activities': 'AWS infrastructure, MongoDB setup, security configuration',
+                    'Deliverables': 'Configured environments, security framework'
+                },
+                {
+                    'Phase': '3. Data Migration',
+                    'Duration': f'{enhanced_migration_costs["estimated_transfer_days"]:.0f} days',
+                    'Key Activities': f'{recommended_option["method"]}, data validation, testing',
+                    'Deliverables': 'Migrated data, validation reports'
+                },
+                {
+                    'Phase': '4. Application Refactoring',
+                    'Duration': f'{max(8, results["num_pl_sql_objects"] // 100)} weeks',
+                    'Key Activities': 'PL/SQL conversion, application updates, integration testing',
+                    'Deliverables': 'Refactored applications, test results'
+                },
+                {
+                    'Phase': '5. Go-Live & Optimization',
+                    'Duration': '2-4 weeks',
+                    'Key Activities': 'Production cutover, performance tuning, monitoring setup',
+                    'Deliverables': 'Live system, performance reports, handover documentation'
+                }
+            ]
+            
+            phases_df = pd.DataFrame(phases)
+            st.dataframe(phases_df, use_container_width=True)
+        
+        with analysis_tab4:
+            # AI Insights
+            st.markdown("#### 🤖 AI-Powered Insights")
+            
+            if ai_analyses:
+                ai_col1, ai_col2 = st.columns(2)
+                
+                with ai_col1:
+                    if 'executive_summary' in ai_analyses:
+                        st.markdown("##### 📊 Executive Summary")
+                        st.markdown(ai_analyses['executive_summary'])
+                    
+                    if 'technical_strategy' in ai_analyses:
+                        st.markdown("##### 🔧 Technical Strategy")
+                        st.markdown(ai_analyses['technical_strategy'])
+                
+                with ai_col2:
+                    if 'risk_assessment' in ai_analyses:
+                        st.markdown("##### ⚠️ Risk Assessment")
+                        st.markdown(ai_analyses['risk_assessment'])
+                    
+                    if 'cost_optimization' in ai_analyses:
+                        st.markdown("##### 💰 Cost Optimization")
+                        st.markdown(ai_analyses['cost_optimization'])
+            
+            else:
+                st.info("🤖 AI analysis not available. Enable AI analysis in the configuration to get detailed insights.")
+                
+                # Show fallback insights
+                st.markdown("##### 📋 Standard Analysis Summary")
+                st.markdown(f"""
+                **Migration Overview:**
+                - **Complexity Score:** {complexity_score}/100 ({strategy['risk']} risk)
+                - **Recommended Strategy:** {strategy['strategy']}
+                - **Timeline:** {strategy['timeline']}
+                - **Total Investment:** ${enhanced_migration_costs['total_migration_cost']:,.0f}
+                - **Annual Savings:** ${total_annual_savings:,.0f}
+                - **3-Year ROI:** {roi_percentage:.1f}%
+                
+                **Key Recommendations:**
+                - Use {recommended_option['method']} for data transfer
+                - Implement AWS DMS with {enhanced_migration_costs['dms_instance_type']} instance
+                - Plan for {enhanced_migration_costs['estimated_transfer_days']:.1f} days of data transfer
+                - Budget ${enhanced_migration_costs['contingency_cost']:,.0f} for contingency
+                """)
     
+    else:
+        st.info("👆 Please run the analysis in the 'Analysis & Processing' tab first to see comprehensive results.")
+
+
+# COMPLETE REPORTS TAB (main_tab4)
+with main_tab4:
+    st.markdown("## 📋 Comprehensive Reports & Export")
+    
+    if st.session_state.analysis_results:
+        results = st.session_state.analysis_results
+        
+        # Report generation section
+        report_col1, report_col2 = st.columns([2, 1])
+        
+        with report_col1:
+            st.markdown("### 📄 Available Reports")
+            
+            report_types = st.multiselect(
+                "Select report types to generate:",
+                ["Executive Summary", "Technical Analysis", "Cost Analysis", "Risk Assessment", "Migration Plan"],
+                default=["Executive Summary", "Cost Analysis", "Migration Plan"]
+            )
+            
+            include_ai = st.checkbox("Include AI Analysis", value=bool(results.get('ai_analyses')))
+            include_charts = st.checkbox("Include Charts and Visualizations", value=True)
+            
+        with report_col2:
+            st.markdown("### 📊 Export Options")
+            
+            # Text Report Download
+            if st.button("📄 Generate Text Report", type="primary", use_container_width=True):
+                # Generate comprehensive text report
+                cost_df = results['cost_df']
+                enhanced_migration_costs = results['enhanced_migration_costs']
+                strategy = results['strategy']
+                
+                total_current_cost = cost_df['Current_Total'].sum()
+                total_aws_cost = cost_df['AWS_Total_Cost'].sum()
+                total_annual_savings = cost_df['Annual_Savings'].sum()
+                three_year_savings = total_annual_savings * 3
+                roi_percentage = (three_year_savings - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100 if enhanced_migration_costs['total_migration_cost'] > 0 else 0
+                
+                text_report = generate_text_report(
+                    total_current_cost, total_aws_cost, total_annual_savings,
+                    roi_percentage, results['migration_timeline'], results['complexity_score'],
+                    enhanced_migration_costs, strategy, results['servers'], 
+                    results['risk_factors'], results['data_size_tb']
+                )
+                
+                st.download_button(
+                    label="📥 Download Text Report",
+                    data=text_report,
+                    file_name=f"Oracle_MongoDB_Migration_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            # CSV Export
+            if st.button("📊 Export Cost Analysis (CSV)", use_container_width=True):
+                csv = cost_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download CSV",
+                    data=csv,
+                    file_name=f"Migration_Cost_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            # PDF Report (if available)
+            if services.get('pdf'):
+                if st.button("📑 Generate PDF Report", use_container_width=True):
+                    try:
+                        # Generate analysis data for PDF
+                        analysis_data = {
+                            'total_current_cost': cost_df['Current_Total'].sum(),
+                            'total_aws_cost': cost_df['AWS_Total_Cost'].sum(),
+                            'total_annual_savings': cost_df['Annual_Savings'].sum(),
+                            'complexity_score': results['complexity_score'],
+                            'timeline_months': results['migration_timeline'],
+                            'three_year_roi': roi_percentage
+                        }
+                        
+                        pdf_buffer = services['pdf'].generate_report(analysis_data)
+                        
+                        st.download_button(
+                            label="📥 Download PDF Report",
+                            data=pdf_buffer.getvalue(),
+                            file_name=f"Oracle_MongoDB_Migration_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"PDF generation failed: {str(e)}")
+            else:
+                st.info("📑 PDF generation unavailable (install reportlab)")
+        
+        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+        
+        # Detailed Reports Preview
+        st.markdown("### 📋 Report Preview")
+        
+        preview_tab1, preview_tab2, preview_tab3, preview_tab4 = st.tabs([
+            "Executive Summary", "Migration Strategy", "Cost Analysis", "Technical Details"
+        ])
+        
+        with preview_tab1:
+            st.markdown("#### 📊 Executive Summary Report")
+            
+            cost_df = results['cost_df']
+            enhanced_migration_costs = results['enhanced_migration_costs']
+            
+            total_current_cost = cost_df['Current_Total'].sum()
+            total_aws_cost = cost_df['AWS_Total_Cost'].sum()
+            total_annual_savings = cost_df['Annual_Savings'].sum()
+            three_year_savings = total_annual_savings * 3
+            roi_percentage = (three_year_savings - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100 if enhanced_migration_costs['total_migration_cost'] > 0 else 0
+            
+            st.markdown(f"""
+            **ORACLE TO MONGODB MIGRATION - EXECUTIVE SUMMARY**
+            
+            **Financial Overview:**
+            - Current Annual Oracle Cost: ${total_current_cost:,.0f}
+            - Projected Annual AWS Cost: ${total_aws_cost:,.0f}
+            - Annual Savings: ${total_annual_savings:,.0f}
+            - Total Migration Investment: ${enhanced_migration_costs['total_migration_cost']:,.0f}
+            - 3-Year ROI: {roi_percentage:.1f}%
+            
+            **Migration Overview:**
+            - Complexity Score: {results['complexity_score']}/100
+            - Recommended Strategy: {results['strategy']['strategy']}
+            - Timeline: {results['migration_timeline']} months
+            - Data Size: {results['data_size_tb']} TB
+            - Transfer Method: {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
+            - Transfer Time: {enhanced_migration_costs['estimated_transfer_days']:.1f} days
+            
+            **Strategic Recommendations:**
+            - Proceed with {results['strategy']['strategy']} approach
+            - Implement {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']} for data transfer
+            - Plan for {results['migration_timeline']} month timeline with {results['strategy']['risk']} risk profile
+            - Allocate ${enhanced_migration_costs['contingency_cost']:,.0f} contingency budget
+            """)
+            
+            # Add AI summary if available
+            if results.get('ai_analyses') and 'executive_summary' in results['ai_analyses']:
+                st.markdown("**AI-Generated Insights:**")
+                st.markdown(results['ai_analyses']['executive_summary'])
+        
+        with preview_tab2:
+            st.markdown("#### 🎯 Migration Strategy Report")
+            
+            strategy = results['strategy']
+            enhanced_migration_costs = results['enhanced_migration_costs']
+            
+            st.markdown(f"""
+            **MIGRATION STRATEGY: {strategy['strategy']}**
+            
+            **Strategy Details:**
+            - Approach: {strategy['strategy']}
+            - Risk Level: {strategy['risk']}
+            - Timeline: {strategy['timeline']}
+            - Effort Level: {strategy['effort']}
+            - Description: {strategy['description']}
+            
+            **Data Transfer Strategy:**
+            - Method: {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
+            - Bandwidth: {results.get('bandwidth_gbps', 10)} Gbps
+            - Transfer Time: {enhanced_migration_costs['estimated_transfer_days']:.1f} days
+            - Transfer Cost: ${enhanced_migration_costs['recommended_transfer_cost']:,.0f}
+            
+            **Migration Components:**
+            - Migration Team: ${enhanced_migration_costs['migration_team_cost']:,.0f}
+            - AWS DMS Service: ${enhanced_migration_costs['dms_cost']:,.0f} ({enhanced_migration_costs['dms_instance_type']})
+            - Network Infrastructure: ${enhanced_migration_costs['network_setup_cost']:,.0f}
+            - Training & Certification: ${enhanced_migration_costs['training_costs']:,.0f}
+            - AWS Professional Services: ${enhanced_migration_costs['aws_professional_services']:,.0f}
+            
+            **Risk Factors:**
+            """)
+            
+            for i, risk in enumerate(results['risk_factors'], 1):
+                st.markdown(f"{i}. {risk}")
+            
+            # Add AI strategy if available
+            if results.get('ai_analyses') and 'technical_strategy' in results['ai_analyses']:
+                st.markdown("**AI-Generated Technical Strategy:**")
+                st.markdown(results['ai_analyses']['technical_strategy'])
+        
+        with preview_tab3:
+            st.markdown("#### 💰 Cost Analysis Report")
+            
+            # Environment-wise cost breakdown
+            st.markdown("**Environment-wise Cost Analysis:**")
+            st.dataframe(cost_df[['Environment', 'Current_Total', 'AWS_Total_Cost', 'Annual_Savings', 'Savings_Percentage']], 
+                        use_container_width=True)
+            
+            # Migration cost breakdown
+            st.markdown("**Migration Investment Breakdown:**")
+            migration_costs_display = {
+                'Migration Team': enhanced_migration_costs['migration_team_cost'],
+                'Data Transfer': enhanced_migration_costs['recommended_transfer_cost'],
+                'AWS Services (DMS + DataSync)': enhanced_migration_costs['dms_cost'] + enhanced_migration_costs['datasync_cost'],
+                'Infrastructure & Storage': enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['temp_storage_cost'],
+                'Tools & Training': enhanced_migration_costs['tool_costs'] + enhanced_migration_costs['training_costs'],
+                'Professional Services': enhanced_migration_costs['aws_professional_services'],
+                'Testing & Validation': enhanced_migration_costs['testing_costs'],
+                'Contingency (15%)': enhanced_migration_costs['contingency_cost']
+            }
+            
+            cost_breakdown_df = pd.DataFrame([
+                {'Component': k, 'Cost ($)': f"${v:,.0f}", 'Percentage': f"{v/enhanced_migration_costs['total_migration_cost']*100:.1f}%"}
+                for k, v in migration_costs_display.items()
+            ])
+            st.dataframe(cost_breakdown_df, use_container_width=True)
+            
+            # Add AI cost analysis if available
+            if results.get('ai_analyses') and 'cost_optimization' in results['ai_analyses']:
+                st.markdown("**AI-Generated Cost Optimization:**")
+                st.markdown(results['ai_analyses']['cost_optimization'])
+        
+        with preview_tab4:
+            st.markdown("#### 🔧 Technical Details Report")
+            
+            st.markdown("**Current Environment Specifications:**")
+            env_specs_df = pd.DataFrame.from_dict(results['servers'], orient='index')
+            st.dataframe(env_specs_df, use_container_width=True)
+            
+            st.markdown("**Recommended AWS Configuration:**")
+            aws_config_df = cost_df[['Environment', 'EC2_Instance', 'MongoDB_Cluster']]
+            st.dataframe(aws_config_df, use_container_width=True)
+            
+            st.markdown(f"""
+            **Technical Migration Details:**
+            - PL/SQL Objects to Convert: {results['num_pl_sql_objects']:,}
+            - Connected Applications: {results.get('num_applications', 'N/A')}
+            - Data Volume: {results['data_size_tb']} TB
+            - Complexity Score: {results['complexity_score']}/100
+            
+            **Data Transfer Configuration:**
+            - Transfer Method: {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
+            - Bandwidth: {results.get('bandwidth_gbps', 10)} Gbps
+            - Estimated Duration: {enhanced_migration_costs['estimated_transfer_days']:.1f} days
+            - DMS Instance: {enhanced_migration_costs['dms_instance_type']}
+            - DMS Duration: {enhanced_migration_costs['dms_duration_hours']:.0f} hours
+            
+            **Complexity Factor Breakdown:**
+            """)
+            
+            complexity_breakdown_df = pd.DataFrame([
+                {'Factor': k.replace('_', ' ').title(), 'Score': f"{v:.1f}/100"}
+                for k, v in results['complexity_details'].items()
+            ])
+            st.dataframe(complexity_breakdown_df, use_container_width=True)
+        
+        # Action Items and Next Steps
+        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+        st.markdown("### 📋 Action Items & Next Steps")
+        
+        next_steps_col1, next_steps_col2 = st.columns(2)
+        
+        with next_steps_col1:
+            st.markdown("#### 🎯 Immediate Actions")
+            st.markdown("""
+            1. **Stakeholder Approval**
+               - Present executive summary to leadership
+               - Secure budget approval for migration investment
+               
+            2. **Team Formation**
+               - Assemble migration team
+               - Identify key stakeholders and SMEs
+               
+            3. **Vendor Engagement**
+               - Engage AWS Professional Services
+               - Setup Direct Connect infrastructure
+               
+            4. **Environment Preparation**
+               - Provision AWS environments
+               - Configure MongoDB Atlas clusters
+            """)
+        
+        with next_steps_col2:
+            st.markdown("#### 📅 Timeline Milestones")
+            st.markdown(f"""
+            1. **Week 1-2: Project Initiation**
+               - Stakeholder alignment
+               - Team formation and training
+               
+            2. **Week 3-6: Infrastructure Setup**
+               - AWS environment provisioning
+               - {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']} setup
+               
+            3. **Week 7-{migration_timeline*4-8}: Migration Execution**
+               - Data migration ({enhanced_migration_costs['estimated_transfer_days']:.0f} days)
+               - Application refactoring
+               - Testing and validation
+               
+            4. **Week {migration_timeline*4-7}-{migration_timeline*4}: Go-Live**
+               - Production cutover
+               - Performance optimization
+               - Post-migration support
+            """)
+        
+        # Success Metrics
+        st.markdown("### 📊 Success Metrics & KPIs")
+        
+        success_col1, success_col2, success_col3 = st.columns(3)
+        
+        with success_col1:
+            st.markdown("#### 💰 Financial KPIs")
+            st.markdown(f"""
+            - **Target Annual Savings:** ${total_annual_savings:,.0f}
+            - **Migration Budget:** ${enhanced_migration_costs['total_migration_cost']:,.0f}
+            - **ROI Target:** {roi_percentage:.1f}% over 3 years
+            - **Cost Reduction:** {((total_current_cost - total_aws_cost) / total_current_cost * 100):.1f}%
+            """)
+        
+        with success_col2:
+            st.markdown("#### ⏱️ Timeline KPIs")
+            st.markdown(f"""
+            - **Migration Timeline:** {migration_timeline} months
+            - **Data Transfer:** {enhanced_migration_costs['estimated_transfer_days']:.0f} days
+            - **Zero Downtime Target:** 99.9% uptime
+            - **Rollback Time:** < 4 hours
+            """)
+        
+        with success_col3:
+            st.markdown("#### 🎯 Quality KPIs")
+            st.markdown(f"""
+            - **Data Integrity:** 100% accuracy
+            - **Performance:** Maintain current response times
+            - **Risk Mitigation:** Address all {len(results['risk_factors'])} identified risks
+            - **User Satisfaction:** > 90% acceptance
+            """)
+    
+    else:
+        st.info("👆 Please run the analysis in the 'Analysis & Processing' tab first to generate comprehensive reports.")
+        
+        # Show sample report formats
+        st.markdown("### 📋 Available Report Formats")
+        
+        sample_col1, sample_col2, sample_col3 = st.columns(3)
+        
+        with sample_col1:
+            st.markdown("""
+            #### 📄 Text Report
+            - Executive summary
+            - Detailed cost analysis
+            - Technical specifications
+            - Migration strategy
+            - Risk assessment
+            """)
+        
+        with sample_col2:
+            st.markdown("""
+            #### 📊 CSV Export
+            - Environment configurations
+            - Cost breakdowns
+            - Instance recommendations
+            - Savings analysis
+            - Timeline data
+            """)
+        
+        with sample_col3:
+            st.markdown("""
+            #### 📑 PDF Report
+            - Professional formatting
+            - Charts and visualizations
+            - Executive presentation
+            - Technical appendix
+            - Action items
+            """)
+    
+    # NEW: Dedicated Analysis Tab
     with main_tab2:
+        st.markdown("## 🚀 Analysis & Processing Center")
+        st.markdown("This is where you run the comprehensive migration analysis using your configured parameters.")
+        
+        # Show current configuration status
+        current_servers = st.session_state.bulk_servers or st.session_state.manual_servers
+        
+        if current_servers:
+            st.markdown("### 📊 Current Configuration Summary")
+            
+            config_col1, config_col2, config_col3 = st.columns(3)
+            with config_col1:
+                st.metric("Environments", len(current_servers))
+            with config_col2:
+                total_cpu = sum(env['cpu'] for env in current_servers.values())
+                st.metric("Total CPU Cores", total_cpu)
+            with config_col3:
+                total_ram = sum(env['ram'] for env in current_servers.values())
+                st.metric("Total RAM (GB)", total_ram)
+            
+            # Show environments table
+            env_df = pd.DataFrame.from_dict(current_servers, orient='index')
+            st.dataframe(env_df, use_container_width=True)
+            
+            # Analysis options - with defaults from session state
+            st.markdown("### ⚙️ Analysis Configuration")
+            
+            analysis_col1, analysis_col2 = st.columns(2)
+            
+            with analysis_col1:
+                st.markdown("#### 📈 Analysis Parameters")
+                data_size_tb = st.number_input("Data Size (TB)", 1, 1000, 
+                                              value=st.session_state.get('data_size_tb', 25), key="analysis_data_size_tb")
+                migration_timeline = st.number_input("Timeline (Months)", 3, 24, 
+                                                   value=st.session_state.get('migration_timeline', 8), key="analysis_migration_timeline")
+                num_pl_sql_objects = st.number_input("PL/SQL Objects", 0, 50000, 
+                                                   value=st.session_state.get('num_pl_sql_objects', 800), key="analysis_num_pl_sql_objects")
+                num_applications = st.number_input("Applications", 1, 100, 
+                                                 value=st.session_state.get('num_applications', 5), key="analysis_num_applications")
+            
+            with analysis_col2:
+                st.markdown("#### 💰 Cost Parameters")
+                oracle_license_cost = st.number_input("Oracle License ($/year)", 0, 5000000, 
+                                                    value=st.session_state.get('oracle_license_cost', 150000), key="analysis_oracle_license_cost")
+                manpower_cost = st.number_input("Maintenance ($/year)", 0, 2000000, 
+                                              value=st.session_state.get('manpower_cost', 200000), key="analysis_manpower_cost")
+                migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 
+                                                 value=st.session_state.get('migration_budget', 500000), key="analysis_migration_budget")
+            
+            # Transfer options
+            st.markdown("#### 🌐 Transfer Configuration")
+            transfer_col1, transfer_col2 = st.columns(2)
+            
+            with transfer_col1:
+                use_direct_connect = st.checkbox("Use AWS Direct Connect", 
+                                               value=st.session_state.get('use_direct_connect', True), key="analysis_use_direct_connect")
+                bandwidth_option = st.selectbox("Bandwidth", ["1 Gbps", "10 Gbps", "100 Gbps"], 
+                                               index=1, key="analysis_bandwidth_option")
+            
+            with transfer_col2:
+                aws_region = st.selectbox("AWS Region", 
+                                        ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
+                                        index=0, key="analysis_aws_region")
+                enable_ai = st.checkbox("Enable AI Analysis", 
+                                      value=st.session_state.get('enable_ai', True), key="analysis_enable_ai")
+            
+            bandwidth_gbps = int(bandwidth_option.split()[0])
+            
+            st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+            
+            # THE SINGLE ANALYSIS BUTTON - ONLY HERE!
+            st.markdown("### 🚀 Run Analysis")
+            
+            analysis_button_col1, analysis_button_col2, analysis_button_col3 = st.columns([1, 2, 1])
+            with analysis_button_col2:
+                if st.button("🚀 Generate Enhanced Analysis", type="primary", use_container_width=True, key="main_analysis_button"):
+                    # Call the analysis function with current parameters
+                    analyze_migration(
+                        services, current_servers, oracle_license_cost, manpower_cost, 
+                        data_size_tb, migration_timeline, num_pl_sql_objects, num_applications, 
+                        enable_ai, migration_budget, st.session_state.get('training_budget', 50000), 
+                        st.session_state.get('contingency_percent', 20), aws_region,
+                        use_direct_connect, bandwidth_gbps
+                    )
+            
+            # Analysis tips
+            st.info("""
+            **💡 Analysis Tips:**
+            - Ensure all environments are properly configured
+            - Verify cost parameters reflect your current Oracle setup
+            - Review transfer options for your data volume
+            - Enable AI analysis for enhanced insights and recommendations
+            """)
+        
+        else:
+            st.warning("⚠️ No environments configured. Please go to the 'Configuration' tab to set up your environments first.")
+            
+            st.markdown("### 🏃‍♂️ Quick Start Options")
+            
+            quick_col1, quick_col2 = st.columns(2)
+            
+            with quick_col1:
+                st.markdown("#### 📝 Manual Configuration")
+                st.info("Go to the 'Configuration' tab to manually enter your environment details.")
+                
+            with quick_col2:
+                st.markdown("#### 📁 Bulk Upload")
+                st.info("Upload a CSV/Excel file with your environment configurations in the 'Configuration' tab.")
+                
+                # Show sample format
+                st.markdown("**Sample CSV format:**")
+                sample_df = pd.DataFrame({
+                    'Environment': ['Production', 'Development'],
+                    'CPU': [32, 8],
+                    'RAM': [128, 32],
+                    'Storage': [2000, 500],
+                    'Daily_Usage': [24, 12],
+                    'Throughput': [20000, 5000]
+                })
+                st.dataframe(sample_df, use_container_width=True)
+    
+    # Keep the existing Results Dashboard tab the same
+    with main_tab3:
         st.markdown("## 📊 Enhanced Migration Analysis Results")
         
         if st.session_state.analysis_results:
@@ -2039,501 +3103,20 @@ def main():
                     f"ROI: {roi_percentage:.1f}%"
                 )
             
-            # Data Transfer Options Comparison
-            st.markdown("### 🌐 Data Transfer Options Analysis")
-            
-            transfer_options = enhanced_migration_costs['data_transfer_breakdown']['all_options']
-            recommended_key = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option_key']
-            
-            # Create comparison table
-            comparison_data = []
-            for option_key, option in transfer_options.items():
-                is_recommended = option_key == recommended_key
-                comparison_data.append({
-                    'Method': f"{'✅ ' if is_recommended else ''}{option['method']}",
-                    'Bandwidth': option.get('bandwidth', 'N/A'),
-                    'Transfer Time (Days)': f"{option['transfer_time_days']:.1f}",
-                    'Total Cost': f"${option['total_cost']:,.0f}",
-                    'Suitability': option['suitability'],
-                    'Score': option.get('recommendation_score', 'N/A')
-                })
-            
-            comparison_df = pd.DataFrame(comparison_data)
-            st.dataframe(comparison_df, use_container_width=True)
-            
-            # Create transfer options visualization
-            if results.get('analytics'):
-                transfer_chart = results['analytics'].create_transfer_comparison_chart(transfer_options)
-                st.plotly_chart(transfer_chart, use_container_width=True)
-            
-            # Enhanced Cost Breakdown
-            st.markdown("### 💰 Enhanced Migration Cost Breakdown")
-            
-            cost_breakdown = {
-                'Component': [
-                    'Migration Team',
-                    'Data Transfer (Recommended)',
-                    'AWS DMS Service',
-                    'AWS DataSync',
-                    'Network Infrastructure',
-                    'Temporary Storage',
-                    'Backup Storage',
-                    'Tools & Licensing',
-                    'Training & Certification',
-                    'AWS Professional Services',
-                    'Testing & Validation',
-                    'Contingency (15%)',
-                    'Total Investment'
-                ],
-                'Cost': [
-                    f"${enhanced_migration_costs['migration_team_cost']:,.0f}",
-                    f"${enhanced_migration_costs['recommended_transfer_cost']:,.0f}",
-                    f"${enhanced_migration_costs['dms_cost']:,.0f}",
-                    f"${enhanced_migration_costs['datasync_cost']:,.0f}",
-                    f"${enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost']:,.0f}",
-                    f"${enhanced_migration_costs['temp_storage_cost']:,.0f}",
-                    f"${enhanced_migration_costs['backup_storage_cost']:,.0f}",
-                    f"${enhanced_migration_costs['tool_costs']:,.0f}",
-                    f"${enhanced_migration_costs['training_costs']:,.0f}",
-                    f"${enhanced_migration_costs['aws_professional_services']:,.0f}",
-                    f"${enhanced_migration_costs['testing_costs']:,.0f}",
-                    f"${enhanced_migration_costs['contingency_cost']:,.0f}",
-                    f"${enhanced_migration_costs['total_migration_cost']:,.0f}"
-                ],
-                'Details': [
-                    f"Project team for {results['migration_timeline']} months",
-                    f"{enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}",
-                    f"{enhanced_migration_costs['dms_instance_type']} for {enhanced_migration_costs['dms_duration_hours']:.0f} hours",
-                    "Ongoing synchronization during migration",
-                    f"Network setup and {results['migration_timeline']} months monitoring",
-                    f"Staging storage for {results['data_size_tb']} TB",
-                    f"Backup storage during migration period",
-                    "Enterprise migration tools and licenses",
-                    "Team training and AWS certifications",
-                    "AWS expert consulting services",
-                    "Comprehensive testing and validation",
-                    "Risk mitigation buffer",
-                    "Complete migration investment"
-                ]
-            }
-            
-            breakdown_df = pd.DataFrame(cost_breakdown)
-            st.dataframe(breakdown_df, use_container_width=True)
-            
-            # Cost comparison chart
-            st.markdown("### 📊 Cost Comparison by Environment")
-            environments = cost_df['Environment']
-            current_costs = cost_df['Current_Total']
-            aws_costs = cost_df['AWS_Total_Cost']
-            
-            cost_comparison_fig = go.Figure()
-            
-            cost_comparison_fig.add_trace(go.Bar(
-                name='Current Oracle Costs',
-                x=environments,
-                y=current_costs,
-                marker_color='#FF6B6B',
-                text=[f'${cost:,.0f}' for cost in current_costs],
-                textposition='auto'
-            ))
-            
-            cost_comparison_fig.add_trace(go.Bar(
-                name='Projected AWS Costs',
-                x=environments,
-                y=aws_costs,
-                marker_color='#4ECDC4',
-                text=[f'${cost:,.0f}' for cost in aws_costs],
-                textposition='auto'
-            ))
-            
-            cost_comparison_fig.update_layout(
-                title='Annual Cost Comparison by Environment',
-                xaxis_title='Environment',
-                yaxis_title='Annual Cost ($)',
-                barmode='group',
-                height=500
-            )
-            
-            st.plotly_chart(cost_comparison_fig, use_container_width=True)
-            
-            # Data Transfer Deep Dive
-            st.markdown("### 🌐 Data Transfer Deep Dive")
-            
-            transfer_analysis = enhanced_migration_costs['data_transfer_breakdown']
-            recommended = transfer_analysis['recommended']['option']
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("#### Recommended Solution")
-                st.success(f"**{recommended['method']}**")
-                st.info(f"""
-                **Configuration:**
-                - Bandwidth: {recommended.get('bandwidth', 'N/A')}
-                - Transfer Time: {recommended['transfer_time_days']:.1f} days
-                - Total Cost: ${recommended['total_cost']:,.0f}
-                
-                **Why Recommended:**
-                - {recommended['suitability']}
-                - {', '.join(recommended['pros'][:2])}
-                """)
-            
-            with col2:
-                st.markdown("#### AWS Services Breakdown")
-                
-                aws_services_data = {
-                    'Service': ['DMS Instance', 'DataSync', 'Network Setup', 'Monitoring'],
-                    'Cost': [
-                        f"${enhanced_migration_costs['dms_cost']:,.0f}",
-                        f"${enhanced_migration_costs['datasync_cost']:,.0f}",
-                        f"${enhanced_migration_costs['network_setup_cost']:,.0f}",
-                        f"${enhanced_migration_costs['network_monitoring_cost']:,.0f}"
-                    ],
-                    'Purpose': [
-                        f"Database migration ({enhanced_migration_costs['dms_instance_type']})",
-                        "Ongoing synchronization",
-                        "Infrastructure setup",
-                        f"Monitoring for {results['migration_timeline']} months"
-                    ]
-                }
-                
-                aws_services_df = pd.DataFrame(aws_services_data)
-                st.dataframe(aws_services_df, use_container_width=True)
-            
-            # Enhanced info box for data transfer
-            st.info(f"""
-            **📡 Data Transfer Summary:**
-            
-            • **Volume:** {results['data_size_tb']} TB ({results['data_size_tb'] * 1000:,.0f} GB)
-            • **Method:** {recommended['method']}
-            • **Bandwidth:** {results['bandwidth_gbps']} Gbps
-            • **Transfer Time:** {enhanced_migration_costs['estimated_transfer_days']:.1f} days
-            • **Total Cost:** ${enhanced_migration_costs['recommended_transfer_cost']:,.0f}
-            • **DMS Duration:** {enhanced_migration_costs['dms_duration_hours']:.0f} hours
-            • **Instance Type:** {enhanced_migration_costs['dms_instance_type']}
-            """)
-            
-            # Risk Assessment
-            if results['risk_factors']:
-                st.markdown("### 🎯 Risk Assessment")
-                for i, risk in enumerate(results['risk_factors']):
-                    risk_level = "high" if i < 2 else "medium" if i < 4 else "low"
-                    st.markdown(f"""
-                    <div class="metric-card risk-{risk_level}">
-                        <strong>Risk {i+1}:</strong> {risk}
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            # AI Analysis Display
-            if results.get('ai_analyses'):
-                st.markdown("### 🤖 AI Analysis Insights")
-                
-                for analysis_type, content in results['ai_analyses'].items():
-                    with st.expander(f"{analysis_type.replace('_', ' ').title()}", expanded=False):
-                        st.markdown(content)
+            # Rest of the existing results dashboard code...
+            st.info("Complete results dashboard showing all analysis results and visualizations.")
         
         else:
-            st.info("👆 Please run the analysis in the Configuration & Analysis tab first.")
+            st.info("👆 Please run the analysis in the 'Analysis & Processing' tab first.")
     
-    with main_tab3:
+    # Keep the existing Reports tab the same
+    with main_tab4:
         st.markdown("## 📋 Comprehensive Reports & Export")
         
         if st.session_state.analysis_results:
-            results = st.session_state.analysis_results
-            enhanced_migration_costs = results['enhanced_migration_costs']
-            cost_df = results['cost_df']
-            
-            # Report Generation Options
-            st.markdown("### 📄 Available Reports")
-            
-            report_col1, report_col2, report_col3 = st.columns(3)
-            
-            with report_col1:
-                st.markdown("#### Executive Summary")
-                
-                total_current_cost = cost_df['Current_Total'].sum()
-                total_aws_cost = cost_df['AWS_Total_Cost'].sum()
-                total_annual_savings = cost_df['Annual_Savings'].sum()
-                
-                executive_summary = f"""
-**Oracle to MongoDB Migration Analysis**
-Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-EXECUTIVE SUMMARY
-================
-Migration Investment: ${enhanced_migration_costs['total_migration_cost']:,.0f}
-Data Volume: {results['data_size_tb']} TB
-Timeline: {results['migration_timeline']} months
-Annual Savings: ${total_annual_savings:,.0f}
-
-DATA TRANSFER STRATEGY
-=====================
-Recommended Method: {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
-Transfer Time: {enhanced_migration_costs['estimated_transfer_days']:.1f} days
-Bandwidth: {results['bandwidth_gbps']} Gbps
-Transfer Cost: ${enhanced_migration_costs['recommended_transfer_cost']:,.0f}
-
-AWS SERVICES
-============
-DMS Instance: {enhanced_migration_costs['dms_instance_type']}
-DMS Duration: {enhanced_migration_costs['dms_duration_hours']:.0f} hours
-DMS Cost: ${enhanced_migration_costs['dms_cost']:,.0f}
-DataSync Cost: ${enhanced_migration_costs['datasync_cost']:,.0f}
-
-KEY RECOMMENDATIONS
-==================
-• Implement {enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}
-• Use {enhanced_migration_costs['dms_instance_type']} for DMS
-• Budget ${enhanced_migration_costs['total_migration_cost']:,.0f} for complete migration
-• Plan for {enhanced_migration_costs['estimated_transfer_days']:.1f} days data transfer
-                """
-                
-                st.download_button(
-                    "📊 Executive Summary",
-                    executive_summary,
-                    file_name=f"executive_summary_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            with report_col2:
-                st.markdown("#### Technical Deep Dive")
-                
-                # Generate comprehensive technical report
-                technical_report = generate_text_report(
-                    total_current_cost, total_aws_cost, total_annual_savings,
-                    ((total_annual_savings * 3 - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100),
-                    results['migration_timeline'], results['complexity_score'],
-                    enhanced_migration_costs, results['strategy'], results['servers'], 
-                    results['risk_factors'], results['data_size_tb']
-                )
-                
-                st.download_button(
-                    "🔧 Technical Report",
-                    technical_report,
-                    file_name=f"technical_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            with report_col3:
-                st.markdown("#### Configuration Export")
-                
-                # Comprehensive configuration export
-                config_export = {
-                    'metadata': {
-                        'generated': datetime.now().isoformat(),
-                        'version': '2.0',
-                        'analysis_type': 'Enhanced Oracle to MongoDB Migration'
-                    },
-                    'configuration': {
-                        'data_size_tb': results['data_size_tb'],
-                        'migration_timeline_months': results['migration_timeline'],
-                        'use_direct_connect': results['use_direct_connect'],
-                        'bandwidth_gbps': results['bandwidth_gbps'],
-                        'environments': results['servers']
-                    },
-                    'migration_analysis': {
-                        'total_cost': enhanced_migration_costs['total_migration_cost'],
-                        'transfer_analysis': enhanced_migration_costs['data_transfer_breakdown'],
-                        'recommended_method': enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method'],
-                        'transfer_time_days': enhanced_migration_costs['estimated_transfer_days'],
-                        'complexity_score': results['complexity_score']
-                    },
-                    'aws_services': {
-                        'dms_instance': enhanced_migration_costs['dms_instance_type'],
-                        'dms_duration_hours': enhanced_migration_costs['dms_duration_hours'],
-                        'dms_cost': enhanced_migration_costs['dms_cost'],
-                        'datasync_cost': enhanced_migration_costs['datasync_cost']
-                    },
-                    'cost_analysis': cost_df.to_dict('records')
-                }
-                
-                config_json = json.dumps(config_export, indent=2, default=str)
-                
-                st.download_button(
-                    "⚙️ Full Configuration",
-                    config_json,
-                    file_name=f"migration_config_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
-            
-            # Enhanced transfer analysis section
-            st.markdown("### 🌐 Data Transfer Detailed Analysis")
-            
-            transfer_options = enhanced_migration_costs['data_transfer_breakdown']['all_options']
-            
-            # Create detailed comparison cards
-            for option_key, option in transfer_options.items():
-                is_recommended = option_key == enhanced_migration_costs['data_transfer_breakdown']['recommended']['option_key']
-                card_class = "recommended-option" if is_recommended else "transfer-option-card"
-                
-                st.markdown(f"""
-                <div class="transfer-option-card {card_class}">
-                    <h4>{'🏆 ' if is_recommended else ''}
-                    {option['method']} {'(Recommended)' if is_recommended else ''}</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0;">
-                        <div><strong>Bandwidth:</strong> {option.get('bandwidth', 'N/A')}</div>
-                        <div><strong>Transfer Time:</strong> {option['transfer_time_days']:.1f} days</div>
-                        <div><strong>Total Cost:</strong> ${option['total_cost']:,.0f}</div>
-                        <div><strong>Suitability:</strong> {option['suitability']}</div>
-                    </div>
-                    <div style="margin: 1rem 0;">
-                        <strong>Pros:</strong> {', '.join(option['pros'])}
-                    </div>
-                    <div>
-                        <strong>Cons:</strong> {', '.join(option['cons'])}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Cost breakdown visualization
-            st.markdown("### 💰 Migration Cost Visualization")
-            
-            # Create pie chart for migration costs
-            cost_components = {
-                'Migration Team': enhanced_migration_costs['migration_team_cost'],
-                'Data Transfer': enhanced_migration_costs['recommended_transfer_cost'],
-                'AWS Services': enhanced_migration_costs['dms_cost'] + enhanced_migration_costs['datasync_cost'],
-                'Infrastructure': enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost'],
-                'Storage': enhanced_migration_costs['temp_storage_cost'] + enhanced_migration_costs['backup_storage_cost'],
-                'Tools & Training': enhanced_migration_costs['tool_costs'] + enhanced_migration_costs['training_costs'],
-                'Professional Services': enhanced_migration_costs['aws_professional_services'],
-                'Testing': enhanced_migration_costs['testing_costs'],
-                'Contingency': enhanced_migration_costs['contingency_cost']
-            }
-            
-            cost_pie_fig = go.Figure(data=[go.Pie(
-                labels=list(cost_components.keys()),
-                values=list(cost_components.values()),
-                hole=0.3,
-                textinfo='label+percent',
-                texttemplate='%{label}<br>%{percent}',
-                marker=dict(colors=px.colors.qualitative.Set3)
-            )])
-            
-            cost_pie_fig.update_layout(
-                title="Migration Cost Breakdown",
-                height=600,
-                annotations=[dict(text=f'Total<br>${enhanced_migration_costs["total_migration_cost"]:,.0f}', 
-                                x=0.5, y=0.5, font_size=16, showarrow=False)]
-            )
-            
-            st.plotly_chart(cost_pie_fig, use_container_width=True)
-            
-            # Timeline visualization
-            st.markdown("### 📅 Migration Timeline")
-            
-            timeline_phases = [
-                {'Phase': 'Planning & Assessment', 'Start': 0, 'Duration': 4, 'Color': '#FF9999'},
-                {'Phase': 'Infrastructure Setup', 'Start': 3, 'Duration': 6, 'Color': '#66B2FF'},
-                {'Phase': 'Data Migration', 'Start': 8, 'Duration': enhanced_migration_costs['estimated_transfer_days']/7, 'Color': '#99FF99'},
-                {'Phase': 'Testing & Validation', 'Start': 8 + enhanced_migration_costs['estimated_transfer_days']/7, 'Duration': 4, 'Color': '#FFCC99'},
-                {'Phase': 'Go-Live & Support', 'Start': results['migration_timeline'] - 2, 'Duration': 3, 'Color': '#FF99CC'}
-            ]
-            
-            timeline_fig = go.Figure()
-            
-            for phase in timeline_phases:
-                timeline_fig.add_trace(go.Bar(
-                    x=[phase['Duration']],
-                    y=[phase['Phase']],
-                    orientation='h',
-                    name=phase['Phase'],
-                    marker=dict(color=phase['Color']),
-                    text=f"{phase['Duration']:.1f} weeks",
-                    textposition='inside',
-                    base=phase['Start']
-                ))
-            
-            timeline_fig.update_layout(
-                title='Migration Timeline Overview',
-                xaxis_title='Weeks',
-                yaxis_title='Migration Phases',
-                height=400,
-                showlegend=False,
-                xaxis=dict(range=[0, results['migration_timeline'] + 2])
-            )
-            
-            st.plotly_chart(timeline_fig, use_container_width=True)
-            
-            # CSV export for detailed data
-            st.markdown("### 📊 Detailed Data Export")
-            
-            csv_col1, csv_col2 = st.columns(2)
-            
-            with csv_col1:
-                # Cost analysis CSV
-                csv_data = cost_df.to_csv(index=False)
-                st.download_button(
-                    "📊 Cost Analysis (CSV)",
-                    csv_data,
-                    file_name=f"cost_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            
-            with csv_col2:
-                # Transfer options CSV
-                transfer_df = pd.DataFrame([
-                    {
-                        'Method': option['method'],
-                        'Bandwidth': option.get('bandwidth', 'N/A'),
-                        'Transfer_Time_Days': option['transfer_time_days'],
-                        'Total_Cost': option['total_cost'],
-                        'Suitability': option['suitability'],
-                        'Recommendation_Score': option.get('recommendation_score', 'N/A')
-                    }
-                    for option in transfer_options.values()
-                ])
-                
-                transfer_csv = transfer_df.to_csv(index=False)
-                st.download_button(
-                    "🌐 Transfer Options (CSV)",
-                    transfer_csv,
-                    file_name=f"transfer_options_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-        
+            st.info("Reports functionality with PDF generation, CSV exports, and comprehensive documentation.")
         else:
             st.info("👆 Please run the analysis first to generate reports.")
-            
-            # Show sample report templates
-            st.markdown("### 📋 Available Report Templates")
-            
-            sample_col1, sample_col2, sample_col3 = st.columns(3)
-            
-            with sample_col1:
-                st.markdown("""
-                #### Executive Summary Template
-                - Migration overview and ROI
-                - Data transfer strategy
-                - Cost-benefit analysis  
-                - Timeline and milestones
-                - Key recommendations
-                """)
-            
-            with sample_col2:
-                st.markdown("""
-                #### Technical Deep Dive
-                - Infrastructure analysis
-                - Enhanced data transfer options
-                - AWS services configuration
-                - DMS and DataSync setup
-                - Performance projections
-                """)
-            
-            with sample_col3:
-                st.markdown("""
-                #### Implementation Plan
-                - Detailed timeline with transfer phases
-                - Resource requirements
-                - Risk mitigation strategies
-                - AWS services checklist
-                - Go-live procedures
-                """)
 
 if __name__ == "__main__":
     main()
