@@ -218,6 +218,7 @@ class AWSPricingService:
         self.pricing_client = None
         self.ec2_client = None
         self.region = 'us-east-1'  # Default region
+        self.connection_error = None
         self.initialize_clients()
     
     def initialize_clients(self):
@@ -270,8 +271,11 @@ class AWSPricingService:
             'details': 'Configure AWS credentials for real-time pricing'
         }
     
-    def get_ec2_pricing(self, instance_types: List[str]) -> Dict[str, float]:
+    def get_ec2_pricing(self, instance_types: List[str] = None) -> Dict[str, float]:
         """Get real-time EC2 pricing"""
+        if not instance_types:
+            instance_types = list(self.get_fallback_ec2_pricing().keys())
+            
         pricing = {}
         
         if not self.pricing_client:
@@ -300,7 +304,7 @@ class AWSPricingService:
                             break
                         break
                 else:
-                    pricing[instance_type] = self.get_fallback_ec2_pricing()[instance_type]
+                    pricing[instance_type] = self.get_fallback_ec2_pricing().get(instance_type, 0.192)
                     
         except Exception as e:
             st.warning(f"AWS Pricing API error: {str(e)}. Using fallback pricing.")
@@ -308,8 +312,11 @@ class AWSPricingService:
         
         return pricing
     
-    def get_rds_pricing(self, instance_types: List[str]) -> Dict[str, float]:
+    def get_rds_pricing(self, instance_types: List[str] = None) -> Dict[str, float]:
         """Get real-time RDS pricing"""
+        if not instance_types:
+            instance_types = list(self.get_fallback_rds_pricing().keys())
+            
         pricing = {}
         
         if not self.pricing_client:
@@ -337,7 +344,7 @@ class AWSPricingService:
                             break
                         break
                 else:
-                    pricing[instance_type] = self.get_fallback_rds_pricing()[instance_type]
+                    pricing[instance_type] = self.get_fallback_rds_pricing().get(instance_type, 0.960)
                     
         except Exception as e:
             return self.get_fallback_rds_pricing()
@@ -376,8 +383,8 @@ class AWSPricingService:
     def get_comprehensive_aws_services_pricing(self) -> Dict[str, Any]:
         """Get comprehensive AWS services pricing"""
         return {
-            'ec2': self.get_ec2_pricing(list(self.get_fallback_ec2_pricing().keys())),
-            'rds': self.get_rds_pricing(list(self.get_fallback_rds_pricing().keys())),
+            'ec2': self.get_ec2_pricing(),
+            'rds': self.get_rds_pricing(),
             'mongodb_atlas': self.get_mongodb_atlas_pricing(),
             'storage': {
                 'ebs_gp3': 0.08,  # per GB-month
@@ -413,6 +420,7 @@ class AWSPricingService:
 class EnterpriseAIService:
     def __init__(self):
         self.client = None
+        self.connection_error = None
         self.initialize_client()
     
     def initialize_client(self):
@@ -1200,7 +1208,15 @@ def display_service_status(services):
     
     # AWS Pricing Service Status
     with col1:
-        aws_status = services['pricing'].get_connection_status()
+        try:
+            aws_status = services['pricing'].get_connection_status()
+        except Exception as e:
+            aws_status = {
+                'status': 'error',
+                'message': 'Service initialization error',
+                'details': str(e)
+            }
+            
         status_class = f"status-{aws_status['status']}"
         indicator_class = {
             'connected': 'indicator-green',
@@ -1223,7 +1239,15 @@ def display_service_status(services):
     
     # AI Service Status
     with col2:
-        ai_status = services['ai'].get_connection_status()
+        try:
+            ai_status = services['ai'].get_connection_status()
+        except Exception as e:
+            ai_status = {
+                'status': 'error',
+                'message': 'Service initialization error',
+                'details': str(e)
+            }
+            
         status_class = f"status-{ai_status['status']}"
         indicator_class = {
             'connected': 'indicator-green',
@@ -1263,7 +1287,14 @@ def display_service_status(services):
         """, unsafe_allow_html=True)
     
     # Quick Setup Guide
-    if aws_status['status'] != 'connected' or ai_status['status'] != 'connected':
+    try:
+        aws_needs_setup = aws_status['status'] != 'connected'
+        ai_needs_setup = ai_status['status'] != 'connected'
+    except:
+        aws_needs_setup = True
+        ai_needs_setup = True
+        
+    if aws_needs_setup or ai_needs_setup:
         with st.expander("🔧 Quick Setup Guide", expanded=False):
             setup_col1, setup_col2 = st.columns(2)
             
@@ -1456,13 +1487,17 @@ def analyze_migration(services, servers, oracle_license_cost, manpower_cost, dat
         status_text = st.empty()
         
         # Step 1: Get pricing data
-        aws_status = services['pricing'].get_connection_status()
-        if aws_status['status'] == 'connected':
-            status_text.text("📊 Fetching real-time AWS pricing data...")
-            st.success("✅ Using real-time AWS pricing")
-        else:
+        try:
+            aws_status = services['pricing'].get_connection_status()
+            if aws_status['status'] == 'connected':
+                status_text.text("📊 Fetching real-time AWS pricing data...")
+                st.success("✅ Using real-time AWS pricing")
+            else:
+                status_text.text("📊 Using fallback pricing data...")
+                st.warning(f"⚠️ Using fallback pricing: {aws_status['message']}")
+        except Exception as e:
             status_text.text("📊 Using fallback pricing data...")
-            st.warning(f"⚠️ Using fallback pricing: {aws_status['message']}")
+            st.warning(f"⚠️ Using fallback pricing: Service error")
         
         progress_bar.progress(10)
         pricing_data = services['pricing'].get_comprehensive_aws_services_pricing()
@@ -1497,20 +1532,25 @@ def analyze_migration(services, servers, oracle_license_cost, manpower_cost, dat
         
         # Step 7: AI Analysis
         if enable_ai and services['ai'].client:
-            ai_status = services['ai'].get_connection_status()
-            if ai_status['status'] == 'connected':
-                status_text.text("🤖 Generating AI insights with Claude...")
-                st.success("✅ Using AI-powered analysis")
-                progress_bar.progress(90)
-                migration_data = {
-                    'servers': servers, 'data_size_tb': data_size_tb, 'complexity_score': complexity_score,
-                    'num_pl_sql_objects': num_pl_sql_objects, 'num_applications': num_applications,
-                    'timeline_months': migration_timeline, 'annual_savings': cost_df['Annual_Savings'].sum()
-                }
-                ai_analyses = services['ai'].get_comprehensive_analysis(migration_data)
-            else:
+            try:
+                ai_status = services['ai'].get_connection_status()
+                if ai_status['status'] == 'connected':
+                    status_text.text("🤖 Generating AI insights with Claude...")
+                    st.success("✅ Using AI-powered analysis")
+                    progress_bar.progress(90)
+                    migration_data = {
+                        'servers': servers, 'data_size_tb': data_size_tb, 'complexity_score': complexity_score,
+                        'num_pl_sql_objects': num_pl_sql_objects, 'num_applications': num_applications,
+                        'timeline_months': migration_timeline, 'annual_savings': cost_df['Annual_Savings'].sum()
+                    }
+                    ai_analyses = services['ai'].get_comprehensive_analysis(migration_data)
+                else:
+                    status_text.text("🤖 Generating fallback analysis...")
+                    st.warning(f"⚠️ Using fallback analysis: {ai_status['message']}")
+                    ai_analyses = services['ai'].get_fallback_analysis()
+            except Exception as e:
                 status_text.text("🤖 Generating fallback analysis...")
-                st.warning(f"⚠️ Using fallback analysis: {ai_status['message']}")
+                st.warning(f"⚠️ Using fallback analysis: Service error")
                 ai_analyses = services['ai'].get_fallback_analysis()
         else:
             status_text.text("🤖 Generating rule-based analysis...")
@@ -1756,14 +1796,18 @@ def display_comprehensive_results(services, cost_df, complexity_score, complexit
     
     with report_tab1:
         # Data source indicator
-        aws_status = services['pricing'].get_connection_status()
-        data_source_indicator = {
-            'connected': ('🟢', 'Real-time AWS Pricing', 'success'),
-            'fallback': ('🟡', 'Fallback Pricing Data', 'warning'),
-            'error': ('🔴', 'Fallback Pricing (AWS Error)', 'error'),
-            'unavailable': ('🔴', 'Fallback Pricing (No AWS SDK)', 'error'),
-            'disconnected': ('🔴', 'Fallback Pricing (No Credentials)', 'error')
-        }.get(aws_status['status'], ('🔴', 'Unknown Status', 'error'))
+        try:
+            aws_status = services['pricing'].get_connection_status()
+            data_source_indicator = {
+                'connected': ('🟢', 'Real-time AWS Pricing', 'success'),
+                'fallback': ('🟡', 'Fallback Pricing Data', 'warning'),
+                'error': ('🔴', 'Fallback Pricing (AWS Error)', 'error'),
+                'unavailable': ('🔴', 'Fallback Pricing (No AWS SDK)', 'error'),
+                'disconnected': ('🔴', 'Fallback Pricing (No Credentials)', 'error')
+            }.get(aws_status['status'], ('🔴', 'Unknown Status', 'error'))
+        except Exception as e:
+            aws_status = {'details': 'Service error occurred'}
+            data_source_indicator = ('🔴', 'Fallback Pricing (Service Error)', 'error')
         
         st.markdown(f"""
         <div class="status-{data_source_indicator[2]}" style="padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
@@ -1774,14 +1818,17 @@ def display_comprehensive_results(services, cost_df, complexity_score, complexit
         """, unsafe_allow_html=True)
         
         # Refresh pricing button for real-time users
-        if aws_status['status'] == 'connected':
-            if st.button("🔄 Refresh AWS Pricing", help="Fetch latest pricing data"):
-                with st.spinner("Refreshing pricing data..."):
-                    # Clear cache and refetch
-                    st.cache_data.clear()
-                    services['pricing'] = AWSPricingService()
-                    st.success("✅ Pricing data refreshed!")
-                    st.rerun()
+        try:
+            if aws_status['status'] == 'connected':
+                if st.button("🔄 Refresh AWS Pricing", help="Fetch latest pricing data"):
+                    with st.spinner("Refreshing pricing data..."):
+                        # Clear cache and refetch
+                        st.cache_data.clear()
+                        services['pricing'] = AWSPricingService()
+                        st.success("✅ Pricing data refreshed!")
+                        st.rerun()
+        except:
+            pass  # Skip refresh button if there's an issue
         
         st.subheader("Comprehensive Cost Breakdown")
         
