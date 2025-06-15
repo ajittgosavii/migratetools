@@ -1922,7 +1922,7 @@ def process_environment_file(df):
 
 # REPLACE the existing main() function completely with this:
 
-def main():
+ddef main():
     """Enhanced main function with dedicated Analysis tab"""
     services = initialize_services()
     
@@ -1971,7 +1971,8 @@ def main():
             config_method = st.radio(
                 "Choose how to configure environments:",
                 ["Manual Entry", "Bulk Upload (CSV/Excel/JSON)"],
-                horizontal=True
+                horizontal=True,
+                key="config_method_radio"
             )
             
             if config_method == "Bulk Upload (CSV/Excel/JSON)":
@@ -1985,26 +1986,26 @@ def main():
                 # Original manual configuration
                 col1, col2 = st.columns(2)
                 with col1:
-                    num_environments = st.number_input("Number of Environments", 1, 10, 5)
-                    data_size_tb = st.number_input("Total Data Size (TB)", 1, 1000, 25)
+                    num_environments = st.number_input("Number of Environments", 1, 10, 5, key="config_num_environments")
+                    data_size_tb = st.number_input("Total Data Size (TB)", 1, 1000, 25, key="config_data_size_tb")
                 
                 with col2:
-                    migration_timeline = st.slider("Migration Timeline (Months)", 3, 24, 8)
+                    migration_timeline = st.slider("Migration Timeline (Months)", 3, 24, 8, key="config_migration_timeline")
                     aws_region = st.selectbox("Target AWS Region", 
                                             ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
-                                            index=0)
+                                            index=0, key="config_aws_region")
                 
                 # Enhanced Data Transfer Options
                 st.markdown("### 🌐 Data Transfer Strategy")
                 col1, col2 = st.columns(2)
                 with col1:
-                    use_direct_connect = st.checkbox("Use AWS Direct Connect", value=True)
+                    use_direct_connect = st.checkbox("Use AWS Direct Connect", value=True, key="config_use_direct_connect")
                     bandwidth_option = st.selectbox("Bandwidth Option", 
                                                    ["1 Gbps", "10 Gbps", "100 Gbps"], 
-                                                   index=1)
+                                                   index=1, key="config_bandwidth_option")
                 with col2:
-                    consider_snowball = st.checkbox("Consider AWS Snowball for Large Datasets", value=data_size_tb > 50)
-                    parallel_transfers = st.checkbox("Enable Parallel Transfer Streams", value=True)
+                    consider_snowball = st.checkbox("Consider AWS Snowball for Large Datasets", value=data_size_tb > 50, key="config_consider_snowball")
+                    parallel_transfers = st.checkbox("Enable Parallel Transfer Streams", value=True, key="config_parallel_transfers")
                 
                 bandwidth_gbps = int(bandwidth_option.split()[0])
                 
@@ -2027,18 +2028,18 @@ def main():
                         with st.expander(f"📍 {default_envs[i] if i < len(default_envs) else f'Environment {i+1}'}", expanded=True):
                             env_name = st.text_input(f"Environment Name", 
                                                    value=default_envs[i] if i < len(default_envs) else f"Env{i+1}",
-                                                   key=f"env_name_{i}")
+                                                   key=f"config_env_name_{i}")
                             
                             cpu = st.number_input(f"CPU Cores", 1, 128, 
-                                                [2, 4, 8, 16, 32][min(i, 4)], key=f"cpu_{i}")
+                                                [2, 4, 8, 16, 32][min(i, 4)], key=f"config_cpu_{i}")
                             ram = st.number_input(f"RAM (GB)", 4, 1024, 
-                                                [8, 16, 32, 64, 128][min(i, 4)], key=f"ram_{i}")
+                                                [8, 16, 32, 64, 128][min(i, 4)], key=f"config_ram_{i}")
                             storage = st.number_input(f"Storage (GB)", 10, 10000, 
-                                                    [100, 200, 500, 1000, 2000][min(i, 4)], key=f"storage_{i}")
+                                                    [100, 200, 500, 1000, 2000][min(i, 4)], key=f"config_storage_{i}")
                             throughput = st.number_input(f"IOPS", 100, 100000, 
-                                                       [1000, 2000, 5000, 10000, 20000][min(i, 4)], key=f"throughput_{i}")
+                                                       [1000, 2000, 5000, 10000, 20000][min(i, 4)], key=f"config_throughput_{i}")
                             daily_usage = st.slider(f"Daily Usage (Hours)", 1, 24, 
-                                                  [8, 12, 16, 20, 24][min(i, 4)], key=f"usage_{i}")
+                                                  [8, 12, 16, 20, 24][min(i, 4)], key=f"config_usage_{i}")
                             
                             servers[env_name] = {
                                 'cpu': cpu, 'ram': ram, 'storage': storage,
@@ -2063,15 +2064,15 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("#### Current Oracle Costs")
-                oracle_license_cost = st.number_input("Oracle License Cost ($/year)", 0, 5000000, 150000)
-                manpower_cost = st.number_input("Maintenance & Support ($/year)", 0, 2000000, 200000)
-                oracle_infrastructure = st.number_input("Oracle Infrastructure ($/year)", 0, 1000000, 100000)
+                oracle_license_cost = st.number_input("Oracle License Cost ($/year)", 0, 5000000, 150000, key="config_oracle_license_cost")
+                manpower_cost = st.number_input("Maintenance & Support ($/year)", 0, 2000000, 200000, key="config_manpower_cost")
+                oracle_infrastructure = st.number_input("Oracle Infrastructure ($/year)", 0, 1000000, 100000, key="config_oracle_infrastructure")
             
             with col2:
                 st.markdown("#### Migration Investment")
-                migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 500000)
-                contingency_percent = st.slider("Contingency Buffer (%)", 10, 50, 20)
-                training_budget = st.number_input("Training Budget ($)", 0, 200000, 50000)
+                migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 500000, key="config_migration_budget")
+                contingency_percent = st.slider("Contingency Buffer (%)", 10, 50, 20, key="config_contingency_percent")
+                training_budget = st.number_input("Training Budget ($)", 0, 200000, 50000, key="config_training_budget")
             
             # Store cost values for Analysis tab
             st.session_state.update({
@@ -2088,17 +2089,17 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("#### Application Architecture")
-                num_pl_sql_objects = st.number_input("PL/SQL Objects Count", 0, 50000, 800)
-                num_applications = st.number_input("Connected Applications", 1, 100, 5)
-                integration_endpoints = st.number_input("API/Integration Endpoints", 0, 500, 25)
+                num_pl_sql_objects = st.number_input("PL/SQL Objects Count", 0, 50000, 800, key="config_num_pl_sql_objects")
+                num_applications = st.number_input("Connected Applications", 1, 100, 5, key="config_num_applications")
+                integration_endpoints = st.number_input("API/Integration Endpoints", 0, 500, 25, key="config_integration_endpoints")
             
             with col2:
                 st.markdown("#### Operational Requirements")
-                backup_retention = st.selectbox("Backup Retention (Days)", [7, 14, 30, 90, 365], index=2)
-                high_availability = st.selectbox("High Availability", ["Standard", "Multi-AZ", "Multi-Region"], index=1)
+                backup_retention = st.selectbox("Backup Retention (Days)", [7, 14, 30, 90, 365], index=2, key="config_backup_retention")
+                high_availability = st.selectbox("High Availability", ["Standard", "Multi-AZ", "Multi-Region"], index=1, key="config_high_availability")
                 compliance_requirements = st.multiselect("Compliance Requirements", 
                                                         ["SOX", "HIPAA", "PCI-DSS", "GDPR", "ISO-27001"], 
-                                                        default=["SOX"])
+                                                        default=["SOX"], key="config_compliance_requirements")
             
             # Store technical values for Analysis tab
             st.session_state.update({
@@ -2116,10 +2117,10 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("#### AI Analysis")
-                enable_ai = st.checkbox("Enable AI-Powered Analysis", True)
+                enable_ai = st.checkbox("Enable AI-Powered Analysis", True, key="config_enable_ai")
                 if enable_ai and ANTHROPIC_AVAILABLE and 'anthropic_api_key' not in st.session_state:
                     api_key = st.text_input("Anthropic API Key", type="password", 
-                                           help="Get your API key from console.anthropic.com")
+                                           help="Get your API key from console.anthropic.com", key="config_api_key")
                     if api_key:
                         st.session_state.anthropic_api_key = api_key
                         # Reinitialize AI service with new key
@@ -2127,12 +2128,12 @@ def main():
             
             with col2:
                 st.markdown("#### AWS Integration")
-                use_real_pricing = st.checkbox("Fetch Real-time AWS Pricing", value=AWS_API_AVAILABLE)
+                use_real_pricing = st.checkbox("Fetch Real-time AWS Pricing", value=AWS_API_AVAILABLE, key="config_use_real_pricing")
                 if use_real_pricing and not AWS_API_AVAILABLE:
                     st.warning("AWS SDK not available. Install boto3 and configure credentials.")
                 
                 optimization_level = st.selectbox("Cost Optimization Level", 
-                                                ["Conservative", "Balanced", "Aggressive"], index=1)
+                                                ["Conservative", "Balanced", "Aggressive"], index=1, key="config_optimization_level")
             
             # Store advanced values for Analysis tab
             st.session_state.update({
@@ -2179,22 +2180,22 @@ def main():
             with analysis_col1:
                 st.markdown("#### 📈 Analysis Parameters")
                 data_size_tb = st.number_input("Data Size (TB)", 1, 1000, 
-                                              value=st.session_state.get('data_size_tb', 25))
+                                              value=st.session_state.get('data_size_tb', 25), key="analysis_data_size_tb")
                 migration_timeline = st.number_input("Timeline (Months)", 3, 24, 
-                                                   value=st.session_state.get('migration_timeline', 8))
+                                                   value=st.session_state.get('migration_timeline', 8), key="analysis_migration_timeline")
                 num_pl_sql_objects = st.number_input("PL/SQL Objects", 0, 50000, 
-                                                   value=st.session_state.get('num_pl_sql_objects', 800))
+                                                   value=st.session_state.get('num_pl_sql_objects', 800), key="analysis_num_pl_sql_objects")
                 num_applications = st.number_input("Applications", 1, 100, 
-                                                 value=st.session_state.get('num_applications', 5))
+                                                 value=st.session_state.get('num_applications', 5), key="analysis_num_applications")
             
             with analysis_col2:
                 st.markdown("#### 💰 Cost Parameters")
                 oracle_license_cost = st.number_input("Oracle License ($/year)", 0, 5000000, 
-                                                    value=st.session_state.get('oracle_license_cost', 150000))
+                                                    value=st.session_state.get('oracle_license_cost', 150000), key="analysis_oracle_license_cost")
                 manpower_cost = st.number_input("Maintenance ($/year)", 0, 2000000, 
-                                              value=st.session_state.get('manpower_cost', 200000))
+                                              value=st.session_state.get('manpower_cost', 200000), key="analysis_manpower_cost")
                 migration_budget = st.number_input("Migration Budget ($)", 0, 2000000, 
-                                                 value=st.session_state.get('migration_budget', 500000))
+                                                 value=st.session_state.get('migration_budget', 500000), key="analysis_migration_budget")
             
             # Transfer options
             st.markdown("#### 🌐 Transfer Configuration")
@@ -2202,16 +2203,16 @@ def main():
             
             with transfer_col1:
                 use_direct_connect = st.checkbox("Use AWS Direct Connect", 
-                                               value=st.session_state.get('use_direct_connect', True))
+                                               value=st.session_state.get('use_direct_connect', True), key="analysis_use_direct_connect")
                 bandwidth_option = st.selectbox("Bandwidth", ["1 Gbps", "10 Gbps", "100 Gbps"], 
-                                               index=1)
+                                               index=1, key="analysis_bandwidth_option")
             
             with transfer_col2:
                 aws_region = st.selectbox("AWS Region", 
                                         ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'], 
-                                        index=0)
+                                        index=0, key="analysis_aws_region")
                 enable_ai = st.checkbox("Enable AI Analysis", 
-                                      value=st.session_state.get('enable_ai', True))
+                                      value=st.session_state.get('enable_ai', True), key="analysis_enable_ai")
             
             bandwidth_gbps = int(bandwidth_option.split()[0])
             
@@ -2329,7 +2330,6 @@ def main():
             st.info("Reports functionality with PDF generation, CSV exports, and comprehensive documentation.")
         else:
             st.info("👆 Please run the analysis first to generate reports.")
-
 
 if __name__ == "__main__":
     main()
