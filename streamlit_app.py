@@ -1388,15 +1388,16 @@ def calculate_complexity_analysis(servers, params):
     total_score = sum(factors[factor] * weights[factor] for factor in factors)
     
     # Risk factors
-        risk_factors = []
-        if factors['PL/SQL Complexity'] > 60:  # Use 'factors' here
-            risk_factors.append("High PL/SQL complexity requires extensive refactoring")
-        if factors['Data Volume'] > 70:
-            risk_factors.append("Large data volume may require extended migration timeline")
-        if factors['Application Integration'] > 70:
-            risk_factors.append("Multiple application dependencies increase integration complexity")
-        if len(servers) > 3:
-            risk_factors.append("Multiple environments require coordinated migration approach")
+    # Risk factors
+    risk_factors = []
+    if factors['PL/SQL Complexity'] > 60:  # Use 'factors' here
+        risk_factors.append("High PL/SQL complexity requires extensive refactoring")
+    if factors['Data Volume'] > 70:
+        risk_factors.append("Large data volume may require extended migration timeline")
+    if factors['Application Integration'] > 70:
+        risk_factors.append("Multiple application dependencies increase integration complexity")
+    if len(servers) > 3:
+        risk_factors.append("Multiple environments require coordinated migration approach")
     
     return {
         'score': int(total_score),
