@@ -177,9 +177,30 @@ st.markdown("""
         letter-spacing: 0.5px;
     }
     
-    .status-success { background: #c6f6d5; color: #22543d; }
-    .status-warning { background: #feebc8; color: #744210; }
-    .status-error { background: #fed7d7; color: #742a2a; }
+    .status-connected { background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%); color: #22543d; }
+    .status-disconnected { background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%); color: #742a2a; }
+    .status-fallback { background: linear-gradient(135deg, #feebc8 0%, #fbd38d 100%); color: #744210; }
+    
+    .service-status-card {
+        background: white;
+        padding: 1rem;
+        border-radius: 0.8rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        margin: 0.5rem 0;
+        border-left: 4px solid #e2e8f0;
+    }
+    
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .indicator-green { background-color: #48bb78; }
+    .indicator-red { background-color: #f56565; }
+    .indicator-yellow { background-color: #ed8936; }
     
     .section-divider {
         height: 2px;
@@ -203,12 +224,51 @@ class AWSPricingService:
         """Initialize AWS clients if credentials are available"""
         if AWS_API_AVAILABLE:
             try:
+                # Test with a simple pricing call
                 self.pricing_client = boto3.client('pricing', region_name='us-east-1')
                 self.ec2_client = boto3.client('ec2', region_name=self.region)
+                
+                # Test the connection with a simple call
+                test_response = self.pricing_client.describe_services(MaxResults=1)
                 return True
-            except (NoCredentialsError, ClientError):
+            except (NoCredentialsError, ClientError) as e:
+                self.connection_error = str(e)
+                return False
+            except Exception as e:
+                self.connection_error = f"AWS API Error: {str(e)}"
                 return False
         return False
+    
+    def get_connection_status(self):
+        """Get detailed connection status"""
+        if not AWS_API_AVAILABLE:
+            return {
+                'status': 'unavailable',
+                'message': 'AWS SDK not installed',
+                'details': 'Install boto3: pip install boto3'
+            }
+        
+        try:
+            if self.pricing_client:
+                # Test with actual API call
+                test_response = self.pricing_client.describe_services(MaxResults=1)
+                return {
+                    'status': 'connected',
+                    'message': 'Real-time AWS pricing active',
+                    'details': f'Connected to {self.region} region'
+                }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': 'AWS connection failed',
+                'details': str(e)
+            }
+        
+        return {
+            'status': 'fallback',
+            'message': 'Using fallback pricing',
+            'details': 'Configure AWS credentials for real-time pricing'
+        }
     
     def get_ec2_pricing(self, instance_types: List[str]) -> Dict[str, float]:
         """Get real-time EC2 pricing"""
@@ -362,10 +422,60 @@ class EnterpriseAIService:
                 api_key = st.secrets.get('ANTHROPIC_API_KEY') or st.session_state.get('anthropic_api_key')
                 if api_key:
                     self.client = anthropic.Anthropic(api_key=api_key)
+                    # Test the connection
+                    test_response = self.client.messages.create(
+                        model="claude-3-5-sonnet-20241022",
+                        max_tokens=10,
+                        messages=[{"role": "user", "content": "Hello"}]
+                    )
                     return True
-            except Exception:
-                pass
+            except Exception as e:
+                self.connection_error = str(e)
+                return False
         return False
+    
+    def get_connection_status(self):
+        """Get detailed AI connection status"""
+        if not ANTHROPIC_AVAILABLE:
+            return {
+                'status': 'unavailable',
+                'message': 'Anthropic SDK not installed',
+                'details': 'Install anthropic: pip install anthropic'
+            }
+        
+        api_key = st.secrets.get('ANTHROPIC_API_KEY') or st.session_state.get('anthropic_api_key')
+        if not api_key:
+            return {
+                'status': 'disconnected',
+                'message': 'API key not configured',
+                'details': 'Enter API key in Advanced Options tab'
+            }
+        
+        if self.client:
+            try:
+                # Test with a simple call
+                test_response = self.client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=5,
+                    messages=[{"role": "user", "content": "test"}]
+                )
+                return {
+                    'status': 'connected',
+                    'message': 'AI analysis active',
+                    'details': 'Claude 3.5 Sonnet connected'
+                }
+            except Exception as e:
+                return {
+                    'status': 'error',
+                    'message': 'API connection failed',
+                    'details': str(e)
+                }
+        
+        return {
+            'status': 'fallback',
+            'message': 'Using fallback analysis',
+            'details': 'Configure API key for AI insights'
+        }
     
     def get_comprehensive_analysis(self, migration_data: Dict[str, Any]) -> Dict[str, str]:
         """Get comprehensive AI analysis"""
@@ -963,17 +1073,253 @@ def enhanced_complexity_analysis(servers: Dict[str, Any], data_size_tb: float,
     
     return min(100, round(total_score)), factors, risk_factors
 
+def run_diagnostics(services):
+    """Run comprehensive connection diagnostics"""
+    st.markdown("### 🔍 Connection Diagnostics")
+    
+    # AWS Diagnostics
+    st.markdown("#### ☁️ AWS Connection Test")
+    aws_status = services['pricing'].get_connection_status()
+    
+    with st.expander("AWS Detailed Diagnostics", expanded=True):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**SDK Status:**")
+            st.write(f"✅ boto3 installed" if AWS_API_AVAILABLE else "❌ boto3 not installed")
+            
+            if AWS_API_AVAILABLE:
+                try:
+                    import boto3
+                    session = boto3.Session()
+                    credentials = session.get_credentials()
+                    if credentials:
+                        st.write("✅ AWS credentials found")
+                        st.write(f"🔐 Access Key: {credentials.access_key[:8]}...")
+                        
+                        # Test regions
+                        try:
+                            client = boto3.client('pricing', region_name='us-east-1')
+                            response = client.describe_services(MaxResults=1)
+                            st.write("✅ Pricing API accessible")
+                        except Exception as e:
+                            st.write(f"❌ Pricing API error: {str(e)}")
+                    else:
+                        st.write("❌ No AWS credentials found")
+                except Exception as e:
+                    st.write(f"❌ AWS setup error: {str(e)}")
+        
+        with col2:
+            st.markdown("**Setup Instructions:**")
+            st.code("""
+# Option 1: AWS CLI
+aws configure
+
+# Option 2: Environment Variables  
+export AWS_ACCESS_KEY_ID=your_key
+export AWS_SECRET_ACCESS_KEY=your_secret
+export AWS_DEFAULT_REGION=us-east-1
+
+# Option 3: Streamlit Secrets
+# .streamlit/secrets.toml
+[aws]
+access_key_id = "your_key"
+secret_access_key = "your_secret"
+region = "us-east-1"
+            """, language="bash")
+    
+    # AI Diagnostics
+    st.markdown("#### 🤖 AI Connection Test")
+    ai_status = services['ai'].get_connection_status()
+    
+    with st.expander("AI Detailed Diagnostics", expanded=True):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**SDK Status:**")
+            st.write(f"✅ anthropic installed" if ANTHROPIC_AVAILABLE else "❌ anthropic not installed")
+            
+            if ANTHROPIC_AVAILABLE:
+                api_key = st.secrets.get('ANTHROPIC_API_KEY') or st.session_state.get('anthropic_api_key')
+                if api_key:
+                    st.write("✅ API key configured")
+                    st.write(f"🔐 Key: sk-ant-...{api_key[-8:]}")
+                    
+                    # Test API connection
+                    try:
+                        import anthropic
+                        client = anthropic.Anthropic(api_key=api_key)
+                        test_response = client.messages.create(
+                            model="claude-3-5-sonnet-20241022",
+                            max_tokens=5,
+                            messages=[{"role": "user", "content": "test"}]
+                        )
+                        st.write("✅ API connection successful")
+                        st.write(f"📡 Model: claude-3-5-sonnet-20241022")
+                    except Exception as e:
+                        st.write(f"❌ API connection failed: {str(e)}")
+                else:
+                    st.write("❌ No API key found")
+        
+        with col2:
+            st.markdown("**Setup Instructions:**")
+            st.code("""
+# Option 1: Environment Variable
+export ANTHROPIC_API_KEY=your_key
+
+# Option 2: Streamlit Secrets  
+# .streamlit/secrets.toml
+ANTHROPIC_API_KEY = "your_key"
+
+# Option 3: Enter in UI
+# Use the Advanced Options tab
+            """, language="bash")
+    
+    # PDF Diagnostics
+    st.markdown("#### 📄 PDF Generation Test")
+    with st.expander("PDF Detailed Diagnostics", expanded=True):
+        if PDF_AVAILABLE:
+            st.write("✅ reportlab installed")
+            st.write("✅ PDF generation available")
+            try:
+                from reportlab.lib.pagesizes import letter
+                st.write("✅ All PDF dependencies loaded")
+            except Exception as e:
+                st.write(f"❌ PDF dependency error: {str(e)}")
+        else:
+            st.write("❌ reportlab not installed")
+            st.code("pip install reportlab", language="bash")
+
+# Service Status Display Function
+def display_service_status(services):
+    """Display comprehensive service connection status"""
+    st.markdown('<div class="config-section">', unsafe_allow_html=True)
+    st.markdown('<div class="config-header">🔌 Service Connection Status</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    # AWS Pricing Service Status
+    with col1:
+        aws_status = services['pricing'].get_connection_status()
+        status_class = f"status-{aws_status['status']}"
+        indicator_class = {
+            'connected': 'indicator-green',
+            'error': 'indicator-red', 
+            'fallback': 'indicator-yellow',
+            'unavailable': 'indicator-red',
+            'disconnected': 'indicator-red'
+        }.get(aws_status['status'], 'indicator-red')
+        
+        st.markdown(f"""
+        <div class="service-status-card">
+            <h4>☁️ AWS Pricing Service</h4>
+            <div class="{status_class}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
+                <span class="status-indicator {indicator_class}"></span>
+                <strong>{aws_status['message']}</strong>
+            </div>
+            <small style="color: #718096;">{aws_status['details']}</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # AI Service Status
+    with col2:
+        ai_status = services['ai'].get_connection_status()
+        status_class = f"status-{ai_status['status']}"
+        indicator_class = {
+            'connected': 'indicator-green',
+            'error': 'indicator-red',
+            'fallback': 'indicator-yellow', 
+            'unavailable': 'indicator-red',
+            'disconnected': 'indicator-red'
+        }.get(ai_status['status'], 'indicator-red')
+        
+        st.markdown(f"""
+        <div class="service-status-card">
+            <h4>🤖 AI Analysis Service</h4>
+            <div class="{status_class}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
+                <span class="status-indicator {indicator_class}"></span>
+                <strong>{ai_status['message']}</strong>
+            </div>
+            <small style="color: #718096;">{ai_status['details']}</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # PDF Generation Status
+    with col3:
+        pdf_status = 'connected' if services['pdf'] else 'unavailable'
+        pdf_message = 'PDF reports available' if services['pdf'] else 'PDF generation unavailable'
+        pdf_details = 'Ready to generate reports' if services['pdf'] else 'Install reportlab for PDF reports'
+        indicator_class = 'indicator-green' if services['pdf'] else 'indicator-red'
+        
+        st.markdown(f"""
+        <div class="service-status-card">
+            <h4>📄 PDF Generation</h4>
+            <div class="status-{pdf_status}" style="padding: 0.5rem; border-radius: 0.5rem; margin: 0.5rem 0;">
+                <span class="status-indicator {indicator_class}"></span>
+                <strong>{pdf_message}</strong>
+            </div>
+            <small style="color: #718096;">{pdf_details}</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Quick Setup Guide
+    if aws_status['status'] != 'connected' or ai_status['status'] != 'connected':
+        with st.expander("🔧 Quick Setup Guide", expanded=False):
+            setup_col1, setup_col2 = st.columns(2)
+            
+            with setup_col1:
+                st.markdown("### 🔧 AWS Setup")
+                if aws_status['status'] == 'unavailable':
+                    st.code("pip install boto3", language="bash")
+                elif aws_status['status'] in ['error', 'fallback', 'disconnected']:
+                    st.markdown("""
+                    **Configure AWS Credentials:**
+                    ```bash
+                    aws configure
+                    # OR
+                    export AWS_ACCESS_KEY_ID=your_key
+                    export AWS_SECRET_ACCESS_KEY=your_secret
+                    export AWS_DEFAULT_REGION=us-east-1
+                    ```
+                    
+                    **Required Permissions:**
+                    - `pricing:GetProducts`
+                    - `pricing:DescribeServices`
+                    """)
+            
+            with setup_col2:
+                st.markdown("### 🤖 AI Setup") 
+                if ai_status['status'] == 'unavailable':
+                    st.code("pip install anthropic", language="bash")
+                elif ai_status['status'] in ['error', 'fallback', 'disconnected']:
+                    st.markdown("""
+                    **Get API Key:**
+                    1. Visit [console.anthropic.com](https://console.anthropic.com/)
+                    2. Create account & generate API key
+                    3. Enter key in Advanced Options tab
+                    
+                    **Or set as environment variable:**
+                    ```bash
+                    export ANTHROPIC_API_KEY=your_key
+                    ```
+                    """)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # Main Application
 def main():
     services = initialize_services()
     
-    # Enterprise Header
+    # Enterprise Header with Status
     st.markdown("""
     <div class="enterprise-header">
         <h1>🏢 Enterprise Oracle to MongoDB Migration Analyzer</h1>
         <p>Comprehensive analysis and planning for enterprise database migration</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Service Status Dashboard
+    display_service_status(services)
     
     # Configuration Section
     st.markdown('<div class="config-section">', unsafe_allow_html=True)
@@ -1082,6 +1428,11 @@ def main():
             
             optimization_level = st.selectbox("Cost Optimization Level", 
                                             ["Conservative", "Balanced", "Aggressive"], index=1)
+            
+            # Diagnostic Section
+            st.markdown("#### 🔍 Diagnostic Information")
+            if st.button("Run Connection Diagnostics"):
+                run_diagnostics(services)
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1105,7 +1456,14 @@ def analyze_migration(services, servers, oracle_license_cost, manpower_cost, dat
         status_text = st.empty()
         
         # Step 1: Get pricing data
-        status_text.text("📊 Fetching AWS pricing data...")
+        aws_status = services['pricing'].get_connection_status()
+        if aws_status['status'] == 'connected':
+            status_text.text("📊 Fetching real-time AWS pricing data...")
+            st.success("✅ Using real-time AWS pricing")
+        else:
+            status_text.text("📊 Using fallback pricing data...")
+            st.warning(f"⚠️ Using fallback pricing: {aws_status['message']}")
+        
         progress_bar.progress(10)
         pricing_data = services['pricing'].get_comprehensive_aws_services_pricing()
         
@@ -1139,15 +1497,24 @@ def analyze_migration(services, servers, oracle_license_cost, manpower_cost, dat
         
         # Step 7: AI Analysis
         if enable_ai and services['ai'].client:
-            status_text.text("🤖 Generating AI insights...")
-            progress_bar.progress(90)
-            migration_data = {
-                'servers': servers, 'data_size_tb': data_size_tb, 'complexity_score': complexity_score,
-                'num_pl_sql_objects': num_pl_sql_objects, 'num_applications': num_applications,
-                'timeline_months': migration_timeline, 'annual_savings': cost_df['Annual_Savings'].sum()
-            }
-            ai_analyses = services['ai'].get_comprehensive_analysis(migration_data)
+            ai_status = services['ai'].get_connection_status()
+            if ai_status['status'] == 'connected':
+                status_text.text("🤖 Generating AI insights with Claude...")
+                st.success("✅ Using AI-powered analysis")
+                progress_bar.progress(90)
+                migration_data = {
+                    'servers': servers, 'data_size_tb': data_size_tb, 'complexity_score': complexity_score,
+                    'num_pl_sql_objects': num_pl_sql_objects, 'num_applications': num_applications,
+                    'timeline_months': migration_timeline, 'annual_savings': cost_df['Annual_Savings'].sum()
+                }
+                ai_analyses = services['ai'].get_comprehensive_analysis(migration_data)
+            else:
+                status_text.text("🤖 Generating fallback analysis...")
+                st.warning(f"⚠️ Using fallback analysis: {ai_status['message']}")
+                ai_analyses = services['ai'].get_fallback_analysis()
         else:
+            status_text.text("🤖 Generating rule-based analysis...")
+            st.info("ℹ️ AI analysis disabled - using rule-based analysis")
             ai_analyses = services['ai'].get_fallback_analysis()
         
         progress_bar.progress(100)
@@ -1388,6 +1755,34 @@ def display_comprehensive_results(services, cost_df, complexity_score, complexit
     ])
     
     with report_tab1:
+        # Data source indicator
+        aws_status = services['pricing'].get_connection_status()
+        data_source_indicator = {
+            'connected': ('🟢', 'Real-time AWS Pricing', 'success'),
+            'fallback': ('🟡', 'Fallback Pricing Data', 'warning'),
+            'error': ('🔴', 'Fallback Pricing (AWS Error)', 'error'),
+            'unavailable': ('🔴', 'Fallback Pricing (No AWS SDK)', 'error'),
+            'disconnected': ('🔴', 'Fallback Pricing (No Credentials)', 'error')
+        }.get(aws_status['status'], ('🔴', 'Unknown Status', 'error'))
+        
+        st.markdown(f"""
+        <div class="status-{data_source_indicator[2]}" style="padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+            <strong>{data_source_indicator[0]} Data Source: {data_source_indicator[1]}</strong><br>
+            <small>{aws_status['details']}</small><br>
+            <small>Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}</small>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Refresh pricing button for real-time users
+        if aws_status['status'] == 'connected':
+            if st.button("🔄 Refresh AWS Pricing", help="Fetch latest pricing data"):
+                with st.spinner("Refreshing pricing data..."):
+                    # Clear cache and refetch
+                    st.cache_data.clear()
+                    services['pricing'] = AWSPricingService()
+                    st.success("✅ Pricing data refreshed!")
+                    st.rerun()
+        
         st.subheader("Comprehensive Cost Breakdown")
         
         # Format the cost dataframe for display
