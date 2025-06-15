@@ -2237,7 +2237,7 @@ def main():
     
     # Add this enhanced PDF functionality to the Reports tab section
 
-# Replace the existing Reports tab content (main_tab3) with this enhanced version:
+    # Replace the existing Reports tab content (main_tab3) with this enhanced version:
 
     with main_tab3:
         st.markdown("## 📋 Comprehensive Reports & Export")
@@ -2376,23 +2376,22 @@ def main():
                         from reportlab.lib.pagesizes import letter, A4
                         from reportlab.lib import colors
                         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-                        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
+                        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
                         from reportlab.lib.units import inch
-                        from reportlab.graphics.shapes import Drawing
-                        from reportlab.graphics.charts.piecharts import Pie
-                        from reportlab.graphics.charts.barcharts import VerticalBarChart
                         
                         buffer = BytesIO()
-                        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, 
-                                            topMargin=72, bottomMargin=18)
+                        doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                                            rightMargin=50, leftMargin=50, 
+                                            topMargin=50, bottomMargin=50)
                         
                         # Custom styles
                         styles = getSampleStyleSheet()
                         title_style = ParagraphStyle(
                             'CustomTitle',
                             parent=styles['Heading1'],
-                            fontSize=24,
-                            spaceAfter=30,
+                            fontSize=22,
+                            spaceAfter=20,
+                            spaceBefore=10,
                             textColor=colors.HexColor('#2D3748'),
                             alignment=1  # Center alignment
                         )
@@ -2400,16 +2399,18 @@ def main():
                         heading_style = ParagraphStyle(
                             'CustomHeading',
                             parent=styles['Heading2'],
-                            fontSize=16,
-                            spaceAfter=12,
+                            fontSize=14,
+                            spaceAfter=10,
+                            spaceBefore=15,
                             textColor=colors.HexColor('#4299E1')
                         )
                         
                         body_style = ParagraphStyle(
                             'CustomBody',
                             parent=styles['Normal'],
-                            fontSize=11,
-                            spaceAfter=8,
+                            fontSize=10,
+                            spaceAfter=6,
+                            spaceBefore=3,
                             textColor=colors.HexColor('#2D3748')
                         )
                         
@@ -2417,109 +2418,143 @@ def main():
                         
                         # Title Page
                         story.append(Paragraph("Oracle to MongoDB Migration Analysis", title_style))
-                        story.append(Spacer(1, 20))
+                        story.append(Spacer(1, 15))
                         story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y')}", body_style))
-                        story.append(Spacer(1, 50))
+                        story.append(Spacer(1, 30))
                         
                         # Executive Summary
                         story.append(Paragraph("Executive Summary", heading_style))
+                        roi_calculation = ((total_annual_savings * 3 - enhanced_migration_costs['total_migration_cost']) / enhanced_migration_costs['total_migration_cost'] * 100) if enhanced_migration_costs['total_migration_cost'] > 0 else 0
+                        
                         executive_data = [
                             ['Metric', 'Current State', 'Target State', 'Impact'],
                             ['Annual Cost', f"${total_current_cost:,.0f}", 
                             f"${total_aws_cost:,.0f}", 
                             f"${total_annual_savings:,.0f} savings"],
                             ['Data Volume', f"{results['data_size_tb']} TB", 
-                            f"MongoDB Atlas", f"Enhanced scalability"],
-                            ['Migration Investment', '', 
+                            "MongoDB Atlas", "Enhanced scalability"],
+                            ['Migration Cost', "Current Oracle setup", 
                             f"${enhanced_migration_costs['total_migration_cost']:,.0f}", 
-                            f"{results['migration_timeline']} months"],
-                            ['Complexity Score', '', f"{results['complexity_score']}/100", 
+                            f"{results['migration_timeline']} months timeline"],
+                            ['Complexity Score', f"{results['complexity_score']}/100", 
+                            f"{results['strategy']['strategy']}", 
                             f"{results['strategy']['risk']} risk level"],
-                            ['Data Transfer', '', 
-                            f"{enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']['method']}", 
-                            f"{enhanced_migration_costs['estimated_transfer_days']:.1f} days"]
+                            ['3-Year ROI', "Current investment", 
+                            f"{roi_calculation:.1f}%", 
+                            f"Break-even in {enhanced_migration_costs['total_migration_cost']/total_annual_savings:.1f} years"]
                         ]
                         
-                        exec_table = Table(executive_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+                        # Properly sized table
+                        exec_table = Table(executive_data, colWidths=[1.8*inch, 1.8*inch, 1.8*inch, 1.8*inch])
                         exec_table.setStyle(TableStyle([
                             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4299E1')),
                             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                            ('FONTSIZE', (0, 0), (-1, 0), 10),
-                            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 9),
+                            ('FONTSIZE', (0, 1), (-1, -1), 8),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                            ('TOPPADDING', (0, 0), (-1, -1), 8),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F7FAFC')),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')])
                         ]))
                         
                         story.append(exec_table)
-                        story.append(Spacer(1, 30))
+                        story.append(Spacer(1, 20))
                         
                         # Data Transfer Strategy
                         story.append(Paragraph("Data Transfer Strategy", heading_style))
                         recommended_option = enhanced_migration_costs['data_transfer_breakdown']['recommended']['option']
                         
-                        transfer_content = f"""
-                        <b>Recommended Method:</b> {recommended_option['method']}<br/>
-                        <b>Data Volume:</b> {results['data_size_tb']} TB ({results['data_size_tb'] * 1000:,.0f} GB)<br/>
-                        <b>Bandwidth:</b> {results['bandwidth_gbps']} Gbps<br/>
-                        <b>Transfer Time:</b> {enhanced_migration_costs['estimated_transfer_days']:.1f} days<br/>
-                        <b>Transfer Cost:</b> ${enhanced_migration_costs['recommended_transfer_cost']:,.0f}<br/>
-                        <b>Suitability:</b> {recommended_option['suitability']}<br/><br/>
+                        # Transfer strategy table
+                        transfer_data = [
+                            ['Parameter', 'Value', 'Details'],
+                            ['Recommended Method', recommended_option['method'], recommended_option['suitability']],
+                            ['Data Volume', f"{results['data_size_tb']} TB", f"{results['data_size_tb'] * 1000:,.0f} GB total"],
+                            ['Bandwidth', f"{results['bandwidth_gbps']} Gbps", "Dedicated connection"],
+                            ['Transfer Time', f"{enhanced_migration_costs['estimated_transfer_days']:.1f} days", "Estimated duration"],
+                            ['Transfer Cost', f"${enhanced_migration_costs['recommended_transfer_cost']:,.0f}", "Total transfer investment"],
+                            ['Key Benefit 1', recommended_option['pros'][0] if recommended_option['pros'] else 'Optimized transfer', 'Primary advantage'],
+                            ['Key Benefit 2', recommended_option['pros'][1] if len(recommended_option['pros']) > 1 else 'Enterprise reliability', 'Secondary advantage']
+                        ]
                         
-                        <b>Key Benefits:</b><br/>
-                        • {recommended_option['pros'][0] if recommended_option['pros'] else 'Optimized for your data volume'}<br/>
-                        • {recommended_option['pros'][1] if len(recommended_option['pros']) > 1 else 'Enterprise-grade reliability'}<br/>
-                        • Dedicated bandwidth ensuring predictable transfer times<br/>
-                        • Built-in monitoring and validation capabilities
-                        """
+                        transfer_table = Table(transfer_data, colWidths=[1.8*inch, 1.8*inch, 2.6*inch])
+                        transfer_table.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#48BB78')),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 9),
+                            ('FONTSIZE', (0, 1), (-1, -1), 8),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                            ('TOPPADDING', (0, 0), (-1, -1), 6),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F0FFF4')),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')])
+                        ]))
                         
-                        story.append(Paragraph(transfer_content, body_style))
-                        story.append(Spacer(1, 20))
+                        story.append(transfer_table)
+                        story.append(Spacer(1, 15))
                         
                         # AWS Services Configuration
                         story.append(Paragraph("AWS Services Configuration", heading_style))
                         
                         aws_services_data = [
                             ['Service', 'Configuration', 'Duration', 'Cost', 'Purpose'],
-                            ['Database Migration Service', 
+                            ['Database Migration\nService', 
                             enhanced_migration_costs['dms_instance_type'], 
                             f"{enhanced_migration_costs['dms_duration_hours']:.0f} hours",
                             f"${enhanced_migration_costs['dms_cost']:,.0f}",
-                            'Primary database migration'],
-                            ['DataSync', 
-                            'Ongoing synchronization', 
+                            'Primary database\nmigration'],
+                            ['DataSync Service', 
+                            'Ongoing sync', 
                             f"{results['migration_timeline']} months",
                             f"${enhanced_migration_costs['datasync_cost']:,.0f}",
-                            'Data synchronization'],
-                            ['Network Infrastructure', 
-                            f"{results['bandwidth_gbps']} Gbps Direct Connect", 
+                            'Data synchronization\nduring migration'],
+                            ['Network\nInfrastructure', 
+                            f"{results['bandwidth_gbps']} Gbps\nDirect Connect", 
                             f"{results['migration_timeline']} months",
                             f"${enhanced_migration_costs['network_setup_cost']:,.0f}",
-                            'Dedicated connectivity'],
-                            ['Professional Services', 
-                            'AWS Expert Consultation', 
+                            'Dedicated network\nconnectivity'],
+                            ['Professional\nServices', 
+                            'AWS Expert\nConsultation', 
                             'As needed',
                             f"${enhanced_migration_costs['aws_professional_services']:,.0f}",
-                            'Expert guidance']
+                            'Expert guidance\nand support']
                         ]
                         
-                        aws_table = Table(aws_services_data, colWidths=[1.2*inch, 1.2*inch, 1*inch, 1*inch, 1.6*inch])
+                        aws_table = Table(aws_services_data, colWidths=[1.2*inch, 1.3*inch, 1.1*inch, 0.9*inch, 1.7*inch])
                         aws_table.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#48BB78')),
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#ED8936')),
                             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                            ('FONTSIZE', (0, 0), (-1, -1), 9),
-                            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                            ('BACKGROUND', (0, 1), (-1, -1), colors.lightgrey),
-                            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 8),
+                            ('FONTSIZE', (0, 1), (-1, -1), 7),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                            ('TOPPADDING', (0, 0), (-1, -1), 6),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#FED7D7')),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF5F5')])
                         ]))
                         
                         story.append(aws_table)
-                        story.append(Spacer(1, 30))
+                        story.append(Spacer(1, 15))
                         
-                        # Cost Breakdown
+                        # Cost Breakdown - Split into two pages for better readability
                         story.append(Paragraph("Detailed Cost Breakdown", heading_style))
                         
                         cost_breakdown_data = [
@@ -2536,10 +2571,14 @@ def main():
                             f"${enhanced_migration_costs['dms_cost']:,.0f}",
                             f"{(enhanced_migration_costs['dms_cost']/enhanced_migration_costs['total_migration_cost']*100):.1f}%",
                             f"{enhanced_migration_costs['dms_instance_type']} instance"],
-                            ['Infrastructure & Network', 
+                            ['DataSync Service', 
+                            f"${enhanced_migration_costs['datasync_cost']:,.0f}",
+                            f"{(enhanced_migration_costs['datasync_cost']/enhanced_migration_costs['total_migration_cost']*100):.1f}%",
+                            f"Ongoing synchronization"],
+                            ['Network & Infrastructure', 
                             f"${enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost']:,.0f}",
                             f"{((enhanced_migration_costs['network_setup_cost'] + enhanced_migration_costs['network_monitoring_cost'])/enhanced_migration_costs['total_migration_cost']*100):.1f}%",
-                            f"Network setup and monitoring"],
+                            f"Setup and {results['migration_timeline']} months monitoring"],
                             ['Storage & Backup', 
                             f"${enhanced_migration_costs['temp_storage_cost'] + enhanced_migration_costs['backup_storage_cost']:,.0f}",
                             f"{((enhanced_migration_costs['temp_storage_cost'] + enhanced_migration_costs['backup_storage_cost'])/enhanced_migration_costs['total_migration_cost']*100):.1f}%",
@@ -2548,28 +2587,45 @@ def main():
                             f"${enhanced_migration_costs['tool_costs'] + enhanced_migration_costs['training_costs']:,.0f}",
                             f"{((enhanced_migration_costs['tool_costs'] + enhanced_migration_costs['training_costs'])/enhanced_migration_costs['total_migration_cost']*100):.1f}%",
                             f"Licenses and team training"],
-                            ['Contingency', 
+                            ['Professional Services', 
+                            f"${enhanced_migration_costs['aws_professional_services']:,.0f}",
+                            f"{(enhanced_migration_costs['aws_professional_services']/enhanced_migration_costs['total_migration_cost']*100):.1f}%",
+                            f"AWS expert consultation"],
+                            ['Testing & Validation', 
+                            f"${enhanced_migration_costs['testing_costs']:,.0f}",
+                            f"{(enhanced_migration_costs['testing_costs']/enhanced_migration_costs['total_migration_cost']*100):.1f}%",
+                            f"Comprehensive testing"],
+                            ['Contingency Buffer', 
                             f"${enhanced_migration_costs['contingency_cost']:,.0f}",
                             f"{(enhanced_migration_costs['contingency_cost']/enhanced_migration_costs['total_migration_cost']*100):.1f}%",
-                            f"Risk mitigation buffer"],
-                            ['Total Investment', 
+                            f"15% risk mitigation buffer"],
+                            ['TOTAL INVESTMENT', 
                             f"${enhanced_migration_costs['total_migration_cost']:,.0f}",
                             '100.0%',
-                            f"Complete migration cost"]
+                            f"Complete migration investment"]
                         ]
                         
-                        cost_table = Table(cost_breakdown_data, colWidths=[1.8*inch, 1.2*inch, 1*inch, 2*inch])
+                        cost_table = Table(cost_breakdown_data, colWidths=[1.7*inch, 1.3*inch, 0.9*inch, 2.3*inch])
                         cost_table.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#ED8936')),
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#9F7AEA')),
                             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('ALIGN', (0, 0), (1, -1), 'LEFT'),  # Left align first two columns
+                            ('ALIGN', (1, 1), (2, -1), 'RIGHT'),  # Right align amount and percentage columns
+                            ('ALIGN', (3, 0), (3, -1), 'LEFT'),  # Left align details column
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                            ('FONTSIZE', (0, 0), (-1, -1), 9),
-                            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FED7D7')),
-                            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                            ('BACKGROUND', (0, 1), (-1, -2), colors.lightblue),
-                            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+                            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),  # Bold total row
+                            ('FONTSIZE', (0, 0), (-1, 0), 8),
+                            ('FONTSIZE', (0, 1), (-1, -1), 7),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                            ('TOPPADDING', (0, 0), (-1, -1), 5),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#E9D8FD')),  # Highlight total row
+                            ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#FAF5FF')),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#F8F6FF')])
                         ]))
                         
                         story.append(cost_table)
@@ -2578,7 +2634,7 @@ def main():
                         # Environment Analysis
                         story.append(Paragraph("Environment Analysis", heading_style))
                         
-                        env_data = [['Environment', 'CPU (Cores)', 'RAM (GB)', 'Storage (GB)', 'Daily Usage (Hours)', 'AWS Recommendation']]
+                        env_data = [['Environment', 'CPU\n(Cores)', 'RAM\n(GB)', 'Storage\n(GB)', 'Daily Usage\n(Hours)', 'AWS Recommendation']]
                         for env_name, specs in results['servers'].items():
                             # Get recommendations
                             rec = recommend_instances({env_name: specs})[env_name]
@@ -2586,82 +2642,166 @@ def main():
                                 env_name,
                                 str(specs['cpu']),
                                 str(specs['ram']),
-                                str(specs['storage']),
+                                f"{specs['storage']:,}",
                                 str(specs['daily_usage']),
-                                f"EC2: {rec['ec2']}, MongoDB: {rec['mongodb']}"
+                                f"EC2: {rec['ec2']}\nMongoDB: {rec['mongodb']}"
                             ])
                         
-                        env_table = Table(env_data, colWidths=[1*inch, 0.8*inch, 0.8*inch, 1*inch, 1*inch, 1.4*inch])
+                        env_table = Table(env_data, colWidths=[1.2*inch, 0.7*inch, 0.7*inch, 0.9*inch, 0.8*inch, 1.9*inch])
                         env_table.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#9F7AEA')),
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667EEA')),
                             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                            ('FONTSIZE', (0, 0), (-1, -1), 8),
-                            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                            ('BACKGROUND', (0, 1), (-1, -1), colors.lavender),
-                            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 8),
+                            ('FONTSIZE', (0, 1), (-1, -1), 7),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                            ('TOPPADDING', (0, 0), (-1, -1), 6),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#EDF2F7')),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F7FAFC')])
                         ]))
                         
                         story.append(env_table)
-                        story.append(Spacer(1, 20))
+                        story.append(Spacer(1, 15))
                         
                         # Risk Assessment
                         if results['risk_factors']:
                             story.append(Paragraph("Risk Assessment & Mitigation", heading_style))
                             
-                            risk_content = "<b>Identified Risks and Mitigation Strategies:</b><br/><br/>"
-                            for i, risk in enumerate(results['risk_factors'], 1):
-                                risk_level = "HIGH" if i <= 2 else "MEDIUM" if i <= 4 else "LOW"
-                                risk_content += f"<b>{i}. [{risk_level} RISK]</b> {risk}<br/><br/>"
+                            # Create risk table for better formatting
+                            risk_data = [['Risk Level', 'Risk Description', 'Mitigation Strategy']]
                             
-                            story.append(Paragraph(risk_content, body_style))
-                            story.append(Spacer(1, 20))
+                            for i, risk in enumerate(results['risk_factors'], 1):
+                                if i <= 2:
+                                    risk_level = "HIGH"
+                                    mitigation = f"Immediate attention required. Allocate specialized resources and extended timeline for resolution."
+                                elif i <= 4:
+                                    risk_level = "MEDIUM"
+                                    mitigation = f"Monitor closely and implement proactive measures during migration planning."
+                                else:
+                                    risk_level = "LOW"
+                                    mitigation = f"Standard mitigation procedures and regular progress reviews."
+                                
+                                risk_data.append([
+                                    risk_level,
+                                    risk,
+                                    mitigation
+                                ])
+                            
+                            risk_table = Table(risk_data, colWidths=[0.8*inch, 2.8*inch, 2.6*inch])
+                            risk_table.setStyle(TableStyle([
+                                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F56565')),
+                                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                                ('FONTSIZE', (0, 1), (-1, -1), 7),
+                                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#FED7D7')),
+                                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0'))
+                            ]))
+                            
+                            story.append(risk_table)
+                            story.append(Spacer(1, 15))
                         
                         # Implementation Timeline
                         story.append(Paragraph("Implementation Timeline", heading_style))
                         
-                        timeline_content = f"""
-                        <b>Total Timeline:</b> {results['migration_timeline']} months<br/>
-                        <b>Data Transfer Duration:</b> {enhanced_migration_costs['estimated_transfer_days']:.1f} days<br/>
-                        <b>Strategy:</b> {results['strategy']['strategy']}<br/>
-                        <b>Risk Level:</b> {results['strategy']['risk']}<br/><br/>
+                        timeline_data = [
+                            ['Phase', 'Duration', 'Key Activities', 'Deliverables'],
+                            ['Planning &\nAssessment', 
+                            'Weeks 1-4', 
+                            'Detailed analysis, team formation,\nAWS account setup',
+                            'Migration plan, resource allocation,\nbaseline documentation'],
+                            ['Infrastructure\nSetup', 
+                            'Weeks 3-9', 
+                            f'{results["bandwidth_gbps"]} Gbps Direct Connect,\nAWS environment configuration',
+                            'Network connectivity, AWS services\nsetup, security configuration'],
+                            ['Data Migration', 
+                            f'Weeks 8-{8 + enhanced_migration_costs["estimated_transfer_days"]/7:.0f}', 
+                            f'Primary data transfer using\n{recommended_option["method"]}',
+                            f'{results["data_size_tb"]} TB data migrated,\nvalidation reports'],
+                            ['Testing &\nValidation', 
+                            f'Weeks {results["migration_timeline"]*4-8:.0f}-{results["migration_timeline"]*4-4:.0f}', 
+                            'Comprehensive testing,\nperformance validation',
+                            'Test results, performance\nbenchmarks, go-live approval'],
+                            ['Go-Live &\nSupport', 
+                            'Final 2-3 weeks', 
+                            'Production cutover,\nstabilization, optimization',
+                            'Production system, monitoring\nsetup, knowledge transfer']
+                        ]
                         
-                        <b>Key Phases:</b><br/>
-                        1. <b>Planning & Assessment (Weeks 1-4):</b> Detailed analysis and planning<br/>
-                        2. <b>Infrastructure Setup (Weeks 3-9):</b> AWS environment and network configuration<br/>
-                        3. <b>Data Migration (Weeks 8-{8 + enhanced_migration_costs['estimated_transfer_days']/7:.0f}):</b> Primary data transfer using {recommended_option['method']}<br/>
-                        4. <b>Testing & Validation (Weeks {results['migration_timeline']*4-8:.0f}-{results['migration_timeline']*4-4:.0f}):</b> Comprehensive testing and validation<br/>
-                        5. <b>Go-Live & Support (Final 2-3 weeks):</b> Production cutover and stabilization
-                        """
+                        timeline_table = Table(timeline_data, colWidths=[1.3*inch, 1.1*inch, 2.1*inch, 1.7*inch])
+                        timeline_table.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#38B2AC')),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 8),
+                            ('FONTSIZE', (0, 1), (-1, -1), 7),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                            ('TOPPADDING', (0, 0), (-1, -1), 6),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#E6FFFA')),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F0FFF4')])
+                        ]))
                         
-                        story.append(Paragraph(timeline_content, body_style))
-                        story.append(Spacer(1, 30))
+                        story.append(timeline_table)
+                        story.append(Spacer(1, 15))
                         
-                        # Next Steps
+                        # Next Steps & Recommendations
                         story.append(Paragraph("Next Steps & Recommendations", heading_style))
                         
-                        next_steps_content = f"""
-                        <b>Immediate Actions (Next 30 days):</b><br/>
-                        1. Stakeholder approval for ${enhanced_migration_costs['total_migration_cost']:,.0f} budget<br/>
-                        2. AWS Direct Connect setup planning for {results['bandwidth_gbps']} Gbps<br/>
-                        3. Migration team formation and training initiation<br/>
-                        4. {enhanced_migration_costs['dms_instance_type']} DMS instance sizing confirmation<br/><br/>
+                        next_steps_data = [
+                            ['Timeline', 'Action Items', 'Responsible Party', 'Success Criteria'],
+                            ['Next 30 days\n(Immediate)', 
+                            f'• Stakeholder approval for ${enhanced_migration_costs["total_migration_cost"]:,.0f}\n• AWS Direct Connect planning\n• Migration team formation\n• {enhanced_migration_costs["dms_instance_type"]} sizing confirmation',
+                            'Executive team,\nProject manager,\nAWS Solutions Architect',
+                            'Budget approval,\nTeam assembled,\nNetwork planning completed'],
+                            ['60-90 days\n(Short-term)', 
+                            f'• Infrastructure setup completion\n• Data profiling and testing\n• Monitoring procedures\n• {recommended_option["method"]} configuration',
+                            'Technical team,\nAWS specialists,\nNetwork engineers',
+                            'AWS environment ready,\nConnectivity established,\nInitial testing completed'],
+                            ['Long-term\n(Success factors)', 
+                            '• Production-like testing\n• Phased migration approach\n• Continuous optimization\n• Regular progress reviews',
+                            'Migration team,\nStakeholders,\nAWS support',
+                            'Successful production\ncutover with minimal\nbusiness impact']
+                        ]
                         
-                        <b>Short-term (60-90 days):</b><br/>
-                        1. Complete infrastructure setup and network connectivity<br/>
-                        2. Begin data profiling and migration testing<br/>
-                        3. Establish monitoring and backup procedures<br/>
-                        4. Finalize {recommended_option['method']} configuration<br/><br/>
+                        next_steps_table = Table(next_steps_data, colWidths=[1.2*inch, 2.4*inch, 1.4*inch, 1.2*inch])
+                        next_steps_table.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#805AD5')),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 8),
+                            ('FONTSIZE', (0, 1), (-1, -1), 7),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                            ('TOPPADDING', (0, 0), (-1, -1), 8),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#FAF5FF')),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F7FAFC')])
+                        ]))
                         
-                        <b>Long-term Success Factors:</b><br/>
-                        • Comprehensive testing with production-like data<br/>
-                        • Phased migration approach to minimize business impact<br/>
-                        • Continuous monitoring and optimization post-migration<br/>
-                        • Regular checkpoints and progress reviews
-                        """
-                        
-                        story.append(Paragraph(next_steps_content, body_style))
+                        story.append(next_steps_table)
                         
                         # Build PDF
                         doc.build(story)
@@ -2887,6 +3027,5 @@ def main():
                 - Visual charts and graphs
                 - Implementation roadmap
                 """)
-
 if __name__ == "__main__":
     main()
