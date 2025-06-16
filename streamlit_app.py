@@ -13,9 +13,21 @@ from plotly.subplots import make_subplots
 import plotly.figure_factory as ff
 from io import BytesIO
 import base64
-from datetime import datetime, timedelta
-import json
-from typing import Dict, List, Tuple, Any
+
+# ADD THESE NEW PDF IMPORTS HERE:
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.charts.linecharts import HorizontalLineChart
+from reportlab.lib.colors import HexColor
+import tempfile
+import os
+import zipfile  # Add this for bulk downloads
 
 # Page Configuration
 st.set_page_config(
@@ -128,8 +140,571 @@ st.markdown("""
         margin: 3rem 0;
         border-radius: 1px;
     }
+    
+    .pdf-section {
+    background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+    padding: 2rem;
+    border-radius: 1rem;
+    border: 2px solid #fc8181;
+    margin: 1rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# PDF Generation Functions - ADD THESE AFTER YOUR CSS SECTION
+
+def create_pdf_chart(fig, width=6*inch, height=4*inch):
+    """Convert Plotly figure to image for PDF inclusion"""
+    try:
+        # Save plotly figure as image in memory
+        img_bytes = fig.to_image(format="png", width=800, height=600)
+        
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
+            tmp_file.write(img_bytes)
+            tmp_file.flush()
+            return tmp_file.name
+    except:
+        return None
+
+def create_cost_chart_for_pdf(results):
+    """Create cost comparison chart for PDF"""
+    cost_analysis = results['cost_analysis']
+    
+    fig = go.Figure()
+    
+    # Get environment data
+    envs = cost_analysis['cost_breakdown']['Environment'].tolist()
+    current_costs = cost_analysis['cost_breakdown']['Current_Total'].tolist()
+    aws_costs = cost_analysis['cost_breakdown']['AWS_Total'].tolist()
+    
+    fig.add_trace(go.Bar(name='Current Oracle', x=envs, y=current_costs, marker_color='#e53e3e'))
+    fig.add_trace(go.Bar(name='Projected AWS', x=envs, y=aws_costs, marker_color='#38a169'))
+    
+    fig.update_layout(
+        title='Cost Comparison by Environment',
+        xaxis_title='Environment',
+        yaxis_title='Annual Cost ($)',
+        barmode='group',
+        width=800,
+        height=500
+    )
+    
+    return fig
+
+def create_risk_chart_for_pdf(results):
+    """Create risk assessment chart for PDF"""
+    if 'detailed_risk_assessment' not in results:
+        return None
+    
+    risk_assessment = results['detailed_risk_assessment']
+    risk_matrix = risk_assessment['risk_matrix']
+    
+    categories = []
+    scores = []
+    
+    for category, risks in risk_matrix.items():
+        if category == 'category_score':
+            continue
+        if 'category_score' in risks:
+            categories.append(category.replace('_', ' '))
+            scores.append(risks['category_score'])
+    
+    fig = go.Figure(data=go.Bar(
+        x=categories,
+        y=scores,
+        marker_color=['#38a169' if s < 25 else '#d69e2e' if s < 50 else '#e53e3e' if s < 75 else '#9f1239' for s in scores]
+    ))
+    
+    fig.update_layout(
+        title='Risk Assessment by Category',
+        xaxis_title='Risk Category',
+        yaxis_title='Risk Score',
+        width=800,
+        height=500,
+        xaxis_tickangle=-45
+    )
+    
+    return fig
+
+def generate_executive_summary_pdf(results):
+    """Generate Executive Summary PDF report"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*inch, bottomMargin=1*inch)
+    
+    # Get styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=30,
+        textColor=colors.HexColor('#2d3748'),
+        alignment=1  # Center alignment
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=16,
+        spaceAfter=12,
+        textColor=colors.HexColor('#4a5568'),
+        leftIndent=0
+    )
+    
+    # Build PDF content
+    story = []
+    
+    # Title
+    story.append(Paragraph("Oracle to MongoDB Migration Analysis", title_style))
+    story.append(Paragraph(f"Executive Summary Report", styles['Heading3']))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", styles['Normal']))
+    story.append(Spacer(1, 20))
+    
+    # Executive Summary Section
+    story.append(Paragraph("Executive Summary", heading_style))
+    
+    cost_analysis = results['cost_analysis']
+    complexity_analysis = results['complexity_analysis']
+    
+    # Key metrics table
+    exec_data = [
+        ['Metric', 'Value', 'Impact'],
+        ['Current Annual Oracle Cost', f"${cost_analysis['total_current_cost']:,.0f}", 'Baseline'],
+        ['Projected Annual AWS Cost', f"${cost_analysis['total_aws_cost']:,.0f}", 'Target'],
+        ['Annual Savings', f"${cost_analysis['total_annual_savings']:,.0f}", 'Benefit'],
+        ['Migration Investment', f"${cost_analysis['migration_costs']['total']:,.0f}", 'One-time'],
+        ['3-Year ROI', f"{cost_analysis['roi_3_year']:.1f}%", 'Return'],
+        ['Payback Period', f"{cost_analysis.get('payback_period_months', 0):.1f} months", 'Break-even'],
+        ['Complexity Score', f"{complexity_analysis['score']}/100", complexity_analysis['complexity_level']['level']]
+    ]
+    
+    exec_table = Table(exec_data, colWidths=[2.5*inch, 1.5*inch, 1.5*inch])
+    exec_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+    ]))
+    
+    story.append(exec_table)
+    story.append(Spacer(1, 20))
+    
+    # Strategy Recommendation
+    if 'migration_strategy_analysis' in results:
+        strategy = results['migration_strategy_analysis']['recommended_strategy']
+        story.append(Paragraph("Recommended Migration Strategy", heading_style))
+        story.append(Paragraph(f"<b>Strategy:</b> {strategy['name']}", styles['Normal']))
+        story.append(Paragraph(f"<b>Timeline:</b> {strategy['timeline']}", styles['Normal']))
+        story.append(Paragraph(f"<b>Risk Level:</b> {strategy['risk_level']}", styles['Normal']))
+        story.append(Paragraph(f"<b>Description:</b> {strategy['description']}", styles['Normal']))
+        story.append(Spacer(1, 15))
+    
+    # Risk Assessment
+    if 'detailed_risk_assessment' in results:
+        risk_assessment = results['detailed_risk_assessment']
+        story.append(Paragraph("Risk Assessment Summary", heading_style))
+        risk_level = risk_assessment['risk_level']
+        story.append(Paragraph(f"<b>Overall Risk Level:</b> {risk_level['level']}", styles['Normal']))
+        story.append(Paragraph(f"<b>Risk Score:</b> {risk_assessment['overall_risk_score']:.1f}/100", styles['Normal']))
+        story.append(Paragraph(f"<b>Action Required:</b> {risk_level['action']}", styles['Normal']))
+        story.append(Spacer(1, 15))
+    
+    # Environment Overview
+    story.append(Paragraph("Environment Overview", heading_style))
+    env_data = [['Environment', 'CPU Cores', 'RAM (GB)', 'Storage (GB)']]
+    for env, specs in results['servers'].items():
+        env_data.append([env, str(specs['cpu']), str(specs['ram']), str(specs['storage'])])
+    
+    env_table = Table(env_data, colWidths=[1.5*inch, 1*inch, 1*inch, 1*inch])
+    env_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#38a169')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+    ]))
+    
+    story.append(env_table)
+    story.append(Spacer(1, 20))
+    
+    # Cost Breakdown Chart
+    story.append(Paragraph("Cost Analysis", heading_style))
+    cost_fig = create_cost_chart_for_pdf(results)
+    if cost_fig:
+        chart_path = create_pdf_chart(cost_fig)
+        if chart_path:
+            story.append(Image(chart_path, width=6*inch, height=4*inch))
+            story.append(Spacer(1, 10))
+            # Clean up temp file
+            try:
+                os.unlink(chart_path)
+            except:
+                pass
+    
+    # Next Steps
+    story.append(Paragraph("Recommended Next Steps", heading_style))
+    next_steps = [
+        "1. Stakeholder approval and budget allocation",
+        "2. Migration team formation and training",
+        "3. AWS infrastructure and MongoDB Atlas setup",
+        "4. Detailed migration planning and timeline confirmation",
+        "5. Risk mitigation strategy implementation"
+    ]
+    
+    for step in next_steps:
+        story.append(Paragraph(step, styles['Normal']))
+    
+    # Build PDF
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def generate_detailed_technical_pdf(results):
+    """Generate Detailed Technical PDF report"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.75*inch, bottomMargin=0.75*inch)
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        spaceAfter=20,
+        textColor=colors.HexColor('#2d3748'),
+        alignment=1
+    )
+    
+    story = []
+    
+    # Title Page
+    story.append(Paragraph("Oracle to MongoDB Migration Analysis", title_style))
+    story.append(Paragraph("Detailed Technical Report", styles['Heading2']))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
+    story.append(Spacer(1, 30))
+    
+    # Migration Parameters
+    story.append(Paragraph("Migration Parameters", styles['Heading2']))
+    params = results['params']
+    param_data = [
+        ['Parameter', 'Value'],
+        ['Data Size', f"{params['data_size_tb']} TB"],
+        ['Migration Timeline', f"{params['migration_timeline']} months"],
+        ['PL/SQL Objects', f"{params['num_pl_sql_objects']:,}"],
+        ['Connected Applications', f"{params['num_applications']}"],
+        ['Oracle License Cost', f"${params['oracle_license_cost']:,}/year"],
+        ['Maintenance Cost', f"${params['manpower_cost']:,}/year"],
+        ['Migration Budget', f"${params['migration_budget']:,}"],
+        ['Bandwidth', f"{params['bandwidth_gbps']} Gbps"],
+        ['Direct Connect', 'Yes' if params['use_direct_connect'] else 'No']
+    ]
+    
+    param_table = Table(param_data, colWidths=[3*inch, 2*inch])
+    param_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a5568')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+    ]))
+    
+    story.append(param_table)
+    story.append(Spacer(1, 20))
+    
+    # Detailed Cost Analysis
+    story.append(Paragraph("Detailed Cost Analysis", styles['Heading2']))
+    cost_analysis = results['cost_analysis']
+    
+    # Migration costs breakdown
+    migration_data = [
+        ['Cost Component', 'Amount'],
+        ['Migration Team', f"${cost_analysis['migration_costs']['migration_team']:,.0f}"],
+        ['Data Transfer', f"${cost_analysis['migration_costs']['data_transfer']:,.0f}"],
+        ['Tools & Training', f"${cost_analysis['migration_costs']['tools_training']:,.0f}"],
+        ['AWS Services', f"${cost_analysis['migration_costs']['aws_services']:,.0f}"],
+        ['Contingency (15%)', f"${cost_analysis['migration_costs']['contingency']:,.0f}"],
+        ['Total Migration Cost', f"${cost_analysis['migration_costs']['total']:,.0f}"]
+    ]
+    
+    migration_table = Table(migration_data, colWidths=[3*inch, 2*inch])
+    migration_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e53e3e')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#fed7d7')),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -2), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+    ]))
+    
+    story.append(migration_table)
+    story.append(Spacer(1, 20))
+    
+    # Environment Cost Breakdown
+    story.append(Paragraph("Environment Cost Breakdown", styles['Heading3']))
+    cost_df = cost_analysis['cost_breakdown']
+    env_cost_data = [['Environment', 'Current Cost', 'AWS Cost', 'Annual Savings', 'Savings %']]
+    
+    for _, row in cost_df.iterrows():
+        env_cost_data.append([
+            row['Environment'],
+            f"${row['Current_Total']:,.0f}",
+            f"${row['AWS_Total']:,.0f}",
+            f"${row['Annual_Savings']:,.0f}",
+            f"{row['Savings_Percentage']:.1f}%"
+        ])
+    
+    env_cost_table = Table(env_cost_data, colWidths=[1.2*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1*inch])
+    env_cost_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#38a169')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+    ]))
+    
+    story.append(env_cost_table)
+    story.append(PageBreak())
+    
+    # Technical Recommendations
+    story.append(Paragraph("Technical Recommendations", styles['Heading2']))
+    recommendations = results['recommendations']
+    
+    rec_data = [['Environment', 'Current Config', 'Recommended EC2', 'MongoDB Cluster']]
+    for env, specs in results['servers'].items():
+        rec_data.append([
+            env,
+            f"{specs['cpu']} vCPU, {specs['ram']} GB RAM",
+            recommendations[env]['ec2_instance'],
+            recommendations[env]['mongodb_cluster']
+        ])
+    
+    rec_table = Table(rec_data, colWidths=[1.3*inch, 1.7*inch, 1.3*inch, 1.5*inch])
+    rec_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d69e2e')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+    ]))
+    
+    story.append(rec_table)
+    story.append(Spacer(1, 20))
+    
+    # Complexity Analysis
+    story.append(Paragraph("Complexity Analysis", styles['Heading2']))
+    complexity = results['complexity_analysis']
+    story.append(Paragraph(f"Overall Complexity Score: {complexity['score']}/100", styles['Normal']))
+    story.append(Paragraph(f"Complexity Level: {complexity['complexity_level']['level']}", styles['Normal']))
+    story.append(Paragraph(f"Description: {complexity['complexity_level']['description']}", styles['Normal']))
+    story.append(Spacer(1, 15))
+    
+    # Complexity factors table
+    factor_data = [['Complexity Factor', 'Score', 'Impact']]
+    for factor, score in complexity['factors'].items():
+        impact = 'High' if score > 70 else 'Medium' if score > 40 else 'Low'
+        factor_data.append([factor, f"{score:.0f}/100", impact])
+    
+    factor_table = Table(factor_data, colWidths=[2.5*inch, 1*inch, 1*inch])
+    factor_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+    ]))
+    
+    story.append(factor_table)
+    
+    # Risk Factors
+    if complexity['risk_factors']:
+        story.append(Spacer(1, 15))
+        story.append(Paragraph("Identified Risk Factors:", styles['Heading3']))
+        for risk in complexity['risk_factors']:
+            story.append(Paragraph(f"• {risk}", styles['Normal']))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def generate_risk_assessment_pdf(results):
+    """Generate Risk Assessment PDF report"""
+    if 'detailed_risk_assessment' not in results:
+        return None
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.75*inch, bottomMargin=0.75*inch)
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        spaceAfter=20,
+        textColor=colors.HexColor('#2d3748'),
+        alignment=1
+    )
+    
+    story = []
+    
+    # Title
+    story.append(Paragraph("Risk Assessment Report", title_style))
+    story.append(Paragraph("Oracle to MongoDB Migration", styles['Heading2']))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
+    story.append(Spacer(1, 30))
+    
+    risk_assessment = results['detailed_risk_assessment']
+    
+    # Overall Risk Summary
+    story.append(Paragraph("Risk Assessment Summary", styles['Heading2']))
+    risk_level = risk_assessment['risk_level']
+    
+    summary_data = [
+        ['Risk Metric', 'Value', 'Status'],
+        ['Overall Risk Score', f"{risk_assessment['overall_risk_score']:.1f}/100", risk_level['level']],
+        ['Risk Level', risk_level['level'], risk_level['action']],
+        ['Action Required', risk_level['action'], 'Immediate' if risk_level['level'] in ['High', 'Critical'] else 'Planned']
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e53e3e')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+    ]))
+    
+    story.append(summary_table)
+    story.append(Spacer(1, 20))
+    
+    # Risk Category Analysis
+    story.append(Paragraph("Risk Analysis by Category", styles['Heading2']))
+    
+    risk_matrix = risk_assessment['risk_matrix']
+    for category, risks in risk_matrix.items():
+        if category == 'category_score':
+            continue
+        
+        story.append(Paragraph(f"{category.replace('_', ' ')}", styles['Heading3']))
+        
+        # Category risks table
+        risk_data = [['Risk Type', 'Score', 'Level', 'Action Required']]
+        for risk_name, risk_info in risks.items():
+            if risk_name == 'category_score':
+                continue
+            risk_data.append([
+                risk_name.replace('_', ' '),
+                f"{risk_info['score']:.0f}/100",
+                risk_info['level']['level'],
+                risk_info['level']['action']
+            ])
+        
+        if len(risk_data) > 1:  # Only create table if there are risks
+            risk_table = Table(risk_data, colWidths=[2*inch, 1*inch, 1*inch, 1.5*inch])
+            risk_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a5568')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ]))
+            
+            story.append(risk_table)
+            story.append(Spacer(1, 15))
+    
+    # Risk Mitigation Strategies
+    if 'mitigation_strategies' in risk_assessment:
+        story.append(PageBreak())
+        story.append(Paragraph("Risk Mitigation Strategies", styles['Heading2']))
+        
+        mitigation = risk_assessment['mitigation_strategies']
+        for category, strategies in mitigation.items():
+            if strategies:
+                story.append(Paragraph(f"{category.replace('_', ' ')}", styles['Heading3']))
+                for i, strategy in enumerate(strategies):
+                    if strategy:
+                        story.append(Paragraph(f"Strategy {i+1}: {strategy.get('strategy', 'N/A')}", styles['Normal']))
+                        story.append(Paragraph(f"Timeline: {strategy.get('timeline', 'N/A')}", styles['Normal']))
+                        story.append(Paragraph(f"Resources: {', '.join(strategy.get('resources', ['N/A']))}", styles['Normal']))
+                        story.append(Paragraph(f"Cost Impact: {strategy.get('cost_impact', 'N/A')}", styles['Normal']))
+                        story.append(Spacer(1, 10))
+    
+    # Risk Chart
+    risk_fig = create_risk_chart_for_pdf(results)
+    if risk_fig:
+        story.append(Paragraph("Risk Score Visualization", styles['Heading3']))
+        chart_path = create_pdf_chart(risk_fig)
+        if chart_path:
+            story.append(Image(chart_path, width=6*inch, height=4*inch))
+            try:
+                os.unlink(chart_path)
+            except:
+                pass
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def prepare_risk_csv_export(risk_assessment):
+    """Prepare risk assessment data for CSV export"""
+    risk_data = []
+    
+    for category, risks in risk_assessment['risk_matrix'].items():
+        if category == 'category_score':
+            continue
+        for risk_name, risk_info in risks.items():
+            if risk_name == 'category_score':
+                continue
+            risk_data.append({
+                'Category': category.replace('_', ' '),
+                'Risk_Type': risk_name.replace('_', ' '),
+                'Score': risk_info['score'],
+                'Level': risk_info['level']['level'],
+                'Action_Required': risk_info['level']['action'],
+                'Weight': risk_info['weight']
+            })
+    
+    risk_df = pd.DataFrame(risk_data)
+    return risk_df.to_csv(index=False)
 
 def initialize_session_state():
     """Initialize session state variables"""
@@ -1083,8 +1658,10 @@ def analyze_workload_enhanced(servers, params):
     return results
 
 # 5. REPLACE YOUR EXISTING display_enhanced_results FUNCTION WITH THIS UPDATED VERSION
+# REPLACE YOUR EXISTING display_enhanced_results_updated FUNCTION WITH THIS:
+
 def display_enhanced_results_updated(results):
-    """Display enhanced results with all dashboards including new risk and strategy analysis"""
+    """Display enhanced results with PDF export options"""
     if not results:
         st.info("👆 Please complete the analysis first")
         return
@@ -1100,7 +1677,7 @@ def display_enhanced_results_updated(results):
         "🔥 Heat Maps", 
         "📅 Timeline", 
         "💧 Waterfall", 
-        "📄 Export"
+        "📄 PDF Reports"  # Changed from "📄 Export"
     ])
     
     with tab1:
@@ -1125,45 +1702,166 @@ def display_enhanced_results_updated(results):
         create_waterfall_chart(results)
     
     with tab8:
-        st.markdown("## 📄 Export Options")
+        # NEW PDF REPORTS SECTION
+        st.markdown("""
+        <div class="pdf-section">
+            <h2>📄 Professional PDF Reports</h2>
+            <p>Generate comprehensive PDF reports for stakeholders, executives, and technical teams</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("### 📊 Available PDF Reports")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            # Enhanced text report
-            text_report = generate_enhanced_text_report(results)
-            st.download_button(
-                label="📄 Download Enhanced Report",
-                data=text_report,
-                file_name=f"Enhanced_Migration_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
+            st.markdown("#### 👔 Executive Summary")
+            st.markdown("**Perfect for:** Executives, Stakeholders, Decision Makers")
+            st.markdown("**Includes:**")
+            st.markdown("• High-level cost analysis")
+            st.markdown("• ROI and payback period")
+            st.markdown("• Risk summary")
+            st.markdown("• Strategic recommendations")
+            st.markdown("• Next steps")
+            
+            if st.button("📄 Generate Executive PDF", key="exec_pdf", use_container_width=True):
+                with st.spinner("Generating Executive Summary PDF..."):
+                    pdf_buffer = generate_executive_summary_pdf(results)
+                    
+                st.download_button(
+                    label="📥 Download Executive Summary",
+                    data=pdf_buffer.getvalue(),
+                    file_name=f"Executive_Summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
         
         with col2:
-            # Risk assessment CSV
-            if 'detailed_risk_assessment' in results:
-                risk_data = prepare_risk_csv_export(results['detailed_risk_assessment'])
+            st.markdown("#### 🔧 Technical Report")
+            st.markdown("**Perfect for:** Technical Teams, Architects, Engineers")
+            st.markdown("**Includes:**")
+            st.markdown("• Detailed cost breakdowns")
+            st.markdown("• Technical recommendations")
+            st.markdown("• Environment specifications")
+            st.markdown("• Complexity analysis")
+            st.markdown("• Migration parameters")
+            
+            if st.button("📄 Generate Technical PDF", key="tech_pdf", use_container_width=True):
+                with st.spinner("Generating Technical Report PDF..."):
+                    pdf_buffer = generate_detailed_technical_pdf(results)
+                    
                 st.download_button(
-                    label="📊 Download Risk Assessment (CSV)",
-                    data=risk_data,
-                    file_name=f"Risk_Assessment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
+                    label="📥 Download Technical Report",
+                    data=pdf_buffer.getvalue(),
+                    file_name=f"Technical_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf",
                     use_container_width=True
                 )
         
         with col3:
-            # Strategy analysis CSV
-            if 'migration_strategy_analysis' in results:
-                strategy_data = prepare_strategy_csv_export(results['migration_strategy_analysis'])
+            st.markdown("#### ⚠️ Risk Assessment")
+            st.markdown("**Perfect for:** Risk Managers, Project Managers, Compliance")
+            st.markdown("**Includes:**")
+            st.markdown("• Comprehensive risk analysis")
+            st.markdown("• Risk mitigation strategies")
+            st.markdown("• Risk heat maps")
+            st.markdown("• Action plans")
+            st.markdown("• Timeline considerations")
+            
+            if 'detailed_risk_assessment' in results:
+                if st.button("📄 Generate Risk PDF", key="risk_pdf", use_container_width=True):
+                    with st.spinner("Generating Risk Assessment PDF..."):
+                        pdf_buffer = generate_risk_assessment_pdf(results)
+                        
+                    if pdf_buffer:
+                        st.download_button(
+                            label="📥 Download Risk Assessment",
+                            data=pdf_buffer.getvalue(),
+                            file_name=f"Risk_Assessment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+            else:
+                st.info("Risk assessment data not available")
+        
+        # Bulk Download Section
+        st.markdown("---")
+        st.markdown("### 📦 Bulk Download")
+        
+        bulk_col1, bulk_col2 = st.columns(2)
+        
+        with bulk_col1:
+            if st.button("📊 Generate All PDF Reports", key="all_pdf", use_container_width=True):
+                with st.spinner("Generating all PDF reports... This may take a moment..."):
+                    # Create a ZIP file with all reports
+                    zip_buffer = BytesIO()
+                    
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        # Executive Summary
+                        exec_pdf = generate_executive_summary_pdf(results)
+                        zip_file.writestr(f"Executive_Summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf", 
+                                        exec_pdf.getvalue())
+                        
+                        # Technical Report
+                        tech_pdf = generate_detailed_technical_pdf(results)
+                        zip_file.writestr(f"Technical_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf", 
+                                        tech_pdf.getvalue())
+                        
+                        # Risk Assessment (if available)
+                        if 'detailed_risk_assessment' in results:
+                            risk_pdf = generate_risk_assessment_pdf(results)
+                            if risk_pdf:
+                                zip_file.writestr(f"Risk_Assessment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf", 
+                                                risk_pdf.getvalue())
+                    
+                    zip_buffer.seek(0)
+                    
                 st.download_button(
-                    label="📋 Download Strategy Analysis (CSV)",
-                    data=strategy_data,
-                    file_name=f"Strategy_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    label="📥 Download All Reports (ZIP)",
+                    data=zip_buffer.getvalue(),
+                    file_name=f"Migration_Analysis_Reports_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                    mime="application/zip",
+                    use_container_width=True
+                )
+        
+        with bulk_col2:
+            # CSV Data Export
+            st.markdown("#### 📊 Data Export")
+            
+            # Cost Analysis CSV
+            cost_data = results['cost_analysis']['cost_breakdown'].to_csv(index=False)
+            st.download_button(
+                label="📊 Download Cost Analysis (CSV)",
+                data=cost_data,
+                file_name=f"Cost_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            
+            # Risk Data CSV (if available)
+            if 'detailed_risk_assessment' in results:
+                risk_data = prepare_risk_csv_export(results['detailed_risk_assessment'])
+                st.download_button(
+                    label="⚠️ Download Risk Data (CSV)",
+                    data=risk_data,
+                    file_name=f"Risk_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                     mime="text/csv",
                     use_container_width=True
                 )
-
+        
+        # Original text export for backwards compatibility
+        st.markdown("---")
+        st.markdown("### 📝 Legacy Text Export")
+        
+        # Generate enhanced text report
+        text_report = generate_enhanced_text_report(results)
+        st.download_button(
+            label="📄 Download Text Report (Legacy)",
+            data=text_report,
+            file_name=f"Text_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
 def generate_enhanced_text_report(results):
     """Generate enhanced comprehensive text report"""
     cost_analysis = results['cost_analysis']
