@@ -1184,7 +1184,7 @@ Projected Annual AWS Cost: ${cost_analysis['total_aws_cost']:,.0f}
 Annual Savings: ${cost_analysis['total_annual_savings']:,.0f}
 Migration Investment: ${cost_analysis['migration_costs']['total']:,.0f}
 3-Year ROI: {cost_analysis['roi_3_year']:.1f}%
-Payback Period: {cost_analysis['payback_period_months']:.1f} months
+Payback Period: {cost_analysis['payback_period_months']:.1f} months  # Fixed key name
 Complexity Score: {complexity_analysis['score']}/100
 Overall Risk Level: {detailed_risk_assessment['risk_level']['level']}
 
