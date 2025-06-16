@@ -1193,7 +1193,7 @@ Projected Annual AWS Cost: ${cost_analysis['total_aws_cost']:,.0f}
 Annual Savings: ${cost_analysis['total_annual_savings']:,.0f}
 Migration Investment: ${cost_analysis['migration_costs']['total']:,.0f}
 3-Year ROI: {cost_analysis['roi_3_year']:.1f}%
-Payback Period: {cost_analysis['payback_period_months']:.1f} months  # Fixed key name
+Payback Period: {payback_period:.1f} months
 Complexity Score: {complexity_analysis['score']}/100
 Overall Risk Level: {detailed_risk_assessment['risk_level']['level']}
 
@@ -1243,15 +1243,13 @@ DETAILED COST BREAKDOWN
 ======================
 Migration Team: ${cost_analysis['migration_costs']['migration_team']:,.0f}
 Data Transfer: ${cost_analysis['migration_costs']['data_transfer']:,.0f}
+Tools & Training: ${cost_analysis['migration_costs']['tools_training']:,.0f}
 AWS Services: ${cost_analysis['migration_costs']['aws_services']:,.0f}
-Tools & Software: ${cost_analysis['migration_costs']['tools_software']:,.0f}
-Training: ${cost_analysis['migration_costs']['training_certification']:,.0f}
-Professional Services: ${cost_analysis['migration_costs']['professional_services']:,.0f}
-Testing: ${cost_analysis['migration_costs']['testing_validation']:,.0f}
 Contingency: ${cost_analysis['migration_costs']['contingency']:,.0f}
+Total Migration Cost: ${cost_analysis['migration_costs']['total']:,.0f}
 
 RECOMMENDATIONS
-==============
+===============
 1. Proceed with {migration_strategy_analysis['recommended_strategy']['name']} approach
 2. Address high-risk areas identified in risk assessment
 3. Allocate ${cost_analysis['migration_costs']['total']:,.0f} for migration
