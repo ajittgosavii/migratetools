@@ -1172,6 +1172,15 @@ def generate_enhanced_text_report(results):
     migration_strategy_analysis = results['migration_strategy_analysis']
     params = results['params']
     
+    # Calculate payback period if not already in cost_analysis
+    if 'payback_period_months' not in cost_analysis:
+        total_annual_savings = cost_analysis['total_annual_savings']
+        migration_cost = cost_analysis['migration_costs']['total']
+        payback_period = (migration_cost / (total_annual_savings / 12)) if total_annual_savings > 0 else 0
+    else:
+        payback_period = cost_analysis['payback_period_months']
+   
+    
     return f"""
 COMPREHENSIVE ORACLE TO MONGODB MIGRATION ANALYSIS
 =================================================
